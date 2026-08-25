@@ -1,0 +1,12 @@
+name = "JackBaboon"
+uuid = "e5cb0571-5e04-44bf-8e3e-d7edd35096c6"
+version = "0.1.0"
+authors = ["andreykochegura <andreykochegura@gmail.com>"]
+
+[deps]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
+
+[compat]
+Test = "1.11.0"
+UUIDs = "1.11.0"
