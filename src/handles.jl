@@ -250,7 +250,7 @@ function async_execute!(@nospecialize(f), handle::Handle, sem::Semaphore, pool::
                     # pass
                 else
                     set_error_force!(handle, ExecutorInternalError(
-                        "Unknown error",
+                        "Unknown handle state",
                     ))
                 end
             end
