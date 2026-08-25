@@ -249,11 +249,15 @@ function async_execute!(@nospecialize(f), handle::Handle, sem::Semaphore, pool::
                 elseif isfailed(handle)
                     # pass
                 else
-                    set_error_force!(handle, ExecutorInternalError())
+                    set_error_force!(handle, ExecutorInternalError(
+                        "Unknown error",
+                    ))
                 end
             end
         catch
-            set_error_force!(handle, ExecutorInternalError())
+            set_error_force!(handle, ExecutorInternalError(
+                "Unknown error",
+            ))
         finally
             release(sem)
         end
@@ -321,5 +325,7 @@ function Base.fetch(handle::Handle)
     iscanceled(handle) && throw(JobCancelledError(
         "Job was cancelled",
     ))
-    throw(ExecutorInternalError())
+    throw(ExecutorInternalError(
+        "Something wrong",
+    ))
 end

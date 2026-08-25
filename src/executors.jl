@@ -72,10 +72,12 @@ isclosed(executor::Executor)::Bool =
     ExecutorStatuses.Closed == @atomic executor.status
 
 
-struct ExecutorInternalError <: Exception end
+struct ExecutorInternalError <: Exception
+    msg :: AbstractString
+end
 
-function Base.showerror(io::IO, ::ExecutorInternalError)
-    print(io, "ExecutorInternalError")
+function Base.showerror(io::IO, e::ExecutorInternalError)
+    print(io, "ExecutorInternalError: ", e.msg)
 end
 
 function dispatch!(executor::Executor)
@@ -91,7 +93,9 @@ function dispatch!(executor::Executor)
                     async_execute!(job.f, job.handle, executor.sem, executor.pool)  # release here
                 catch ex
                     try
-                        set_error_force!(job.handle, ExecutorInternalError())
+                        set_error_force!(job.handle, ExecutorInternalError(
+                            "Executor dispatcher error",
+                        ))
                         lock(executor.lock) do 
                             close(executor.queue)
                             executor.error = ex
@@ -99,7 +103,9 @@ function dispatch!(executor::Executor)
                             executor.status = ExecutorStatuses.Failed
                         end
                         for job in executor.queue
-                            set_error_force!(job.handle, ExecutorInternalError())
+                            set_error_force!(job.handle, ExecutorInternalError(
+                                "Executor dispatcher error",
+                            ))
                         end
                     catch
                         # pass
@@ -128,7 +134,9 @@ function Base.close(executor::Executor)
         elseif iscrashed(executor)
             throw(CapturedException(executor.error, executor.trace))
         else
-            throw(ExecutorInternalError())
+            throw(ExecutorInternalError(
+                "Unknown error",
+            ))
         end
     end
     return executor
@@ -194,14 +202,18 @@ function submit!(@nospecialize(f), executor::Executor; __dbg::Bool=false)::Handl
     ))
     lock(executor.lock) do
         queue = executor.queue
-        iscrashed(executor) && throw(ExecutorInternalError())
+        iscrashed(executor) && throw(ExecutorInternalError(
+            "Executor is failed"
+        ))
         isclosed(executor) && throw(ExecutorClosedError(
             "Executor is closed",
         ))
         isfull(queue) && throw(ExecutorRejectedError(
             "Executor queue is full",
         ))
-        isopen(queue) || throw(ExecutorInternalError())
+        isopen(queue) || throw(ExecutorInternalError(
+            "Unknown error"
+        ))
         job = Job(f; __dbg)
         put!(queue, job)
         return job.handle
