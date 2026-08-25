@@ -6,7 +6,7 @@ JackBaboon.jl
 [![Coverage](https://codecov.io/gh/OWNER/JackBaboon/branch/main/graph/badge.svg)](https://codecov.io/gh/OWNER/JackBaboon)
 [![Docs](https://img.shields.io/badge/docs-stable-blue)](https://OWNER.github.io/JackBaboon/)
 
-Concurrent job executor for Julia.
+Task executor with limited concurrency for Julia.
 
 ### Fast Start
 

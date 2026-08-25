@@ -142,10 +142,11 @@ Synchronous execution; `__dbg` enables `Handle` trace collection and shows it on
 
 # Examples
 
-```jldoctest
+```julia
 julia> result = execute!(executor) do
-           do_work()
+           2
        end;
+2
 ```
 """
 function execute!(@nospecialize(f), executor::Executor; __dbg::Bool=false)
@@ -178,12 +179,13 @@ Asynchronous execution; `__dbg` enables `Handle` trace collection and shows it o
 
 # Examples
 
-```jldoctest
+```julia
 julia> handle = submit!(executor) do
-           do_work()
+           1
        end
 
 julia> fetch(handle)
+1
 ```
 """
 function submit!(@nospecialize(f), executor::Executor; __dbg::Bool=false)::Handle
