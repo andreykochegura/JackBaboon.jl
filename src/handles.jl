@@ -1,51 +1,70 @@
 # SPDX-License-Identifier: MIT
 
-module HandleStatuses
-    @enum Status::UInt8 begin
-        Queued
-        Pending
-        Running
-        Completed
-        Failed
-        Cancelling
-        Canceled
-    end
-    const TRANSITIONS = Base.ImmutableDict(
-        Queued     => [Pending, Canceled],
-        Pending    => [Running, Canceled],
-        Running    => [Completed, Cancelling, Failed],
-        Cancelling => [Canceled, Failed],
-        Completed  => [],
-        Failed     => [],
-        Canceled   => [],
-    )
+module HandleStates
+using ..StateMachines
+@enum State::UInt8 begin
+    Queued
+    Pending
+    Canceled
+    Running
+    Completed
+    Stopping
+    Stopped
+    Failed
+end
+const STATE_MACHINE = StateMachine(
+    Queued     => [Pending, Canceled],
+    Pending    => [Running, Canceled],
+    Canceled   => [],
+    Running    => [Completed, Stopping, Failed],
+    Completed  => [],
+    Stopping   => [Stopped, Failed],
+    Stopped    => [],
+    Failed     => [],
+)
+can_transit(from::State, to::State) =
+    StateMachines.can_transit(STATE_MACHINE, from, to)
+check_transit(from::State, to::State) =
+    StateMachines.check_transit(STATE_MACHINE, from, to)
+can_reach(from::State, to::State) =
+    StateMachines.can_reach(STATE_MACHINE, from, to)
+is_terminal(state::State) =
+    StateMachines.is_terminal(STATE_MACHINE, state)
+can_precede(from::State, to::State) = 
+    StateMachines.can_precede(STATE_MACHINE, from, to)
 end
 
-struct HandleEvent
-    uuid         :: UUID
+
+struct JobEvent
+    job_uuid     :: UUID
     sequence     :: UInt64
     timestamp    :: UInt64
     cancel_flag  :: Bool
-    result       :: Union{Nothing, Any}
-    error        :: Union{Nothing, Any}
-    trace        :: Union{Nothing, Vector}
-    status       :: HandleStatuses.Status
+    result       :: Any
+    error        :: Any
+    state       :: HandleStates.State
 end
 
 mutable struct Handle
-    const uuid         :: UUID
+    const job_uuid     :: UUID
     const cancel_token :: CancelToken
     const cond         :: Threads.Condition
     const lock         :: ReentrantLock
     const __dbg        :: Bool
-    const dbg_trace    :: Vector{HandleEvent}
-    result             :: Union{Nothing, Any}
-    error              :: Union{Nothing, Any}
-    trace              :: Union{Nothing, Vector}
-    @atomic status     :: HandleStatuses.Status
+    const dbg_trace    :: Vector{JobEvent}
+    result             :: Union{Nothing, Any}  # not baboon code - it's for illustration :)
+    error              :: Union{Nothing, Exception}
+    @atomic state     :: HandleStates.State
 end
 
-function Handle(; __dbg::Bool)
+function Base.show(io::IO, h::Handle)
+    state = @atomic h.state
+    print(io, "JackBaboon.Handle(")
+    printstyled(io, "#=", state, " [", string(h.job_uuid)[end-7:end], "]=#"; color=:light_black)
+    print(io, ")")
+end
+
+function Handle()
     lock = ReentrantLock()
     cond = Threads.Condition(lock)
     handle = Handle(
@@ -53,31 +72,38 @@ function Handle(; __dbg::Bool)
         CancelToken(),
         cond,
         lock,
-        __dbg,
-        [],
+        DEFAULT_JOB_TRACE_ENABLED[],
+        JobEvent[],
         nothing,
         nothing,
-        nothing,
-        HandleStatuses.Queued,
+        HandleStates.Queued,
     )
-    trace!(handle)
+    trace_locked!(handle)
     return handle
 end
 
-struct Job
-    f
-    handle :: Handle
+function wait_state(h::Handle, state::HandleStates.State)
+    lock(h.lock) do
+        while ! (@atomic(h.state) == state || HandleStates.can_precede(@atomic(h.state), state))
+            wait(h.cond)
+        end
+    end
 end
 
-Job(@nospecialize(f); __dbg::Bool) = Job(f, Handle(; __dbg))
+for state in instances(HandleStates.State)
+    name = Symbol(:wait_, lowercase(string(state)))
+    @eval $name(h::Handle) = wait_state(h, $state)
+end
+
 
 """
     isqueued(handle::Handle)::Bool
 
-Returns `true` if job in `Executor` queue.
+Returns `true` if job in executor queue.
 """
 isqueued(handle::Handle)::Bool =
-    HandleStatuses.Queued == @atomic handle.status
+    HandleStates.Queued == @atomic handle.state
+
 
 """
     ispending(handle::Handle)::Bool
@@ -85,7 +111,8 @@ isqueued(handle::Handle)::Bool =
 Returns `true` if job is pending execution.
 """
 ispending(handle::Handle)::Bool =
-    HandleStatuses.Pending == @atomic handle.status
+    HandleStates.Pending == @atomic handle.state
+
 
 """
     isrunning(handle::Handle)::Bool
@@ -93,7 +120,8 @@ ispending(handle::Handle)::Bool =
 Returns `true` if job task is executing.
 """
 isrunning(handle::Handle)::Bool =
-    HandleStatuses.Running == @atomic handle.status
+    HandleStates.Running == @atomic handle.state
+
 
 """
     iscompleted(handle::Handle)::Bool
@@ -101,7 +129,8 @@ isrunning(handle::Handle)::Bool =
 Returns `true` if job task completed successfully.
 """
 iscompleted(handle::Handle)::Bool =
-    HandleStatuses.Completed == @atomic handle.status
+    HandleStates.Completed == @atomic handle.state
+
 
 """
     isfailed(handle::Handle)::Bool
@@ -109,15 +138,26 @@ iscompleted(handle::Handle)::Bool =
 Returns `true` if job task is failed.
 """
 isfailed(handle::Handle)::Bool =
-    HandleStatuses.Failed == @atomic handle.status
+    HandleStates.Failed == @atomic handle.state
+
 
 """
-    iscancelling(handle::Handle)::Bool
+    isstopping(handle::Handle)::Bool
 
-Returns `true` if running job cancellation in progress.
+Returns `true` if running job stopping in progress.
 """
-iscancelling(handle::Handle)::Bool =
-    HandleStatuses.Cancelling == @atomic handle.status
+isstopping(handle::Handle)::Bool =
+    HandleStates.Stopping == @atomic handle.state
+
+
+"""
+    isstopped(handle::Handle)::Bool
+
+Returns `true` if job is stopped.
+"""
+isstopped(handle::Handle)::Bool =
+    HandleStates.Stopped == @atomic handle.state
+
 
 """
     iscanceled(handle::Handle)::Bool
@@ -125,96 +165,64 @@ iscancelling(handle::Handle)::Bool =
 Returns `true` if job was canceled and task is completed.
 """
 iscanceled(handle::Handle)::Bool =
-    HandleStatuses.Canceled == @atomic handle.status
+    HandleStates.Canceled == @atomic handle.state
+
 
 """
     isfinal(handle::Handle)::Bool
 
-Returns `true` if job in final status.
+Returns `true` if job in final state.
 """
 isfinal(handle::Handle)::Bool =
-    iscompleted(handle) || isfailed(handle) || iscanceled(handle)
+    HandleStates.is_terminal(@atomic(handle.state))
 
 
-mutable struct HandleTraceSequence
-    @atomic x :: UInt64
+function set_state_locked!(handle::Handle, state::HandleStates.State; force::Bool=false)
+    force || HandleStates.check_transit(@atomic(handle.state), state)
+    @atomic handle.state = state
+    trace_locked!(handle)
+    notify(handle.cond; all=true, error=false)
+    return handle
 end
-
-const HANDLE_TRACE_GLOBAL_SEQUENCE = HandleTraceSequence(0)
-
-next_trace_global_sequence() =
-    @atomic HANDLE_TRACE_GLOBAL_SEQUENCE.x += 1
-
 
 function trace_locked!(handle::Handle)
     handle.__dbg || return handle
-    push!(handle.dbg_trace, HandleEvent(
-        handle.uuid,
-        next_trace_global_sequence(),
-        time_ns(),   #  not consistent across different threads
-        iscanceled(handle.cancel_token),
+    push!(handle.dbg_trace, JobEvent(
+        handle.job_uuid,
+        next_job_trace_global_sequence(),
+        time_ns(),   # different across different threads and reset every few years
+        iscancelrequested(handle.cancel_token),
         handle.result,
         handle.error,
-        handle.trace,
-        @atomic(handle.status),
+        @atomic(handle.state),
     ))
     return handle
 end
 
-function trace!(handle::Handle)
-    handle.__dbg || return handle
-    lock(handle.lock) do
-        trace_locked!(handle)
-    end
-    return handle
-end
-
-
-Base.notify(handle::Handle) = notify(handle.cond; all=true, error=false)
-
-function transit_locked!(handle::Handle, status::HandleStatuses.Status; force::Bool=false)
-    force || check_transit(HandleStatuses.TRANSITIONS, @atomic(handle.status), status)
-    @atomic handle.status = status
-    trace_locked!(handle)
-    return handle
-end
-
-function set_status_locked!(handle::Handle, status::HandleStatuses.Status; force::Bool=false)
-    transit_locked!(handle, status; force)
-    notify(handle)
-    return handle
-end
-
-function set_status!(handle::Handle, status::HandleStatuses.Status; force::Bool=false)
+function set_state!(handle::Handle, state::HandleStates.State; force::Bool=false)
     lock(handle.lock) do 
-        set_status_locked!(handle, status; force)
+        set_state_locked!(handle, state; force)
     end
     return handle
 end
 
-function set_error_locked!(handle::Handle, error, trace::Vector=[]; force::Bool=false)
-    handle.error = error
-    handle.trace = trace
-    set_status_locked!(handle, HandleStatuses.Failed; force)
-    return handle
-end
-
-function set_error!(handle::Handle, error, trace::Vector=[]; force::Bool=false)
+function set_failed!(handle::Handle, ex, bt::Vector=[]; force::Bool=false)
     lock(handle.lock) do
-        set_error_locked!(handle, error, trace; force)
+        handle.error = CapturedException(ex, bt)
+        set_state_locked!(handle, HandleStates.Failed; force)
     end
     return handle
 end
 
-function set_error_force!(handle::Handle, error, trace::Vector=[])
-    set_error!(handle, error, trace; force=true)
+function set_error_force!(handle::Handle, ex, bt::Vector=[])
+    set_failed!(handle, ex, bt; force=true)
     return handle
 end
 
 function try_pending!(handle::Handle)::Bool
     lock(handle.lock) do
         iscanceled(handle) && return false
-        set_status_locked!(handle, HandleStatuses.Pending)
+        set_state_locked!(handle, HandleStates.Pending)
         return true
     end
 end
@@ -222,7 +230,7 @@ end
 function try_running!(handle::Handle)::Bool
     lock(handle.lock) do
         iscanceled(handle) && return false
-        set_status_locked!(handle, HandleStatuses.Running)
+        set_state_locked!(handle, HandleStates.Running)
         return true
     end
 end
@@ -232,31 +240,32 @@ function async_execute!(@nospecialize(f), handle::Handle, sem::Semaphore, pool::
         release(sem)
         return nothing  # skip canceled
     end
-    Threads.@spawn pool begin
+    Threads.@spawn pool begin  # 
         try
             result = try
                 Base.invokelatest(f, handle.cancel_token)
             catch ex
-                set_error!(handle, ex, catch_backtrace())
+                set_failed!(handle, ex, catch_backtrace())
                 nothing
             end
             lock(handle.lock) do
                 if isrunning(handle)
                     handle.result = result
-                    set_status_locked!(handle, HandleStatuses.Completed)
-                elseif iscancelling(handle)
-                    set_status_locked!(handle, HandleStatuses.Canceled)
+                    set_state_locked!(handle, HandleStates.Completed)
+                elseif isstopping(handle)
+                    handle.result = result
+                    set_state_locked!(handle, HandleStates.Stopped)
                 elseif isfailed(handle)
-                    # pass
+                    # skip failed
                 else
                     set_error_force!(handle, ExecutorInternalError(
-                        "Unknown handle state",
+                        "Wrong handle state: `$(@atomic(handle.state))`",
                     ))
                 end
             end
-        catch
+        catch ex
             set_error_force!(handle, ExecutorInternalError(
-                "Unknown error",
+                "Unknown error", ex, catch_backtrace()
             ))
         finally
             release(sem)
@@ -265,24 +274,36 @@ function async_execute!(@nospecialize(f), handle::Handle, sem::Semaphore, pool::
     return nothing
 end
 
-"""
-    cancel!(handle::Handle)::Handle
 
-Job cancellation; job completion by cancel token is a user responsibility.
 """
-function cancel!(handle::Handle)
+    stop!(handle::Handle)::Handle
+
+Job stopping; job completion is a user responsibility.
+"""
+function stop!(handle::Handle)
     lock(handle.lock) do
-        isfinal(handle) && return handle
-        cancel!(handle.cancel_token)
-        status = isrunning(handle) ?
-            HandleStatuses.Cancelling : # Job task updates its own status from Cancelling to Canceled
-            HandleStatuses.Canceled
-        set_status_locked!(handle, status)
+        stop_locked!(handle)
     end
     return handle
 end
 
+function stop_locked!(handle::Handle)
+    isfinal(handle) && return handle
+    isstopping(handle) && return handle
+    @atomic handle.cancel_token.request = true
+    state = isrunning(handle) ?
+        HandleStates.Stopping :
+        HandleStates.Canceled
+    set_state_locked!(handle, state)
+    return handle
+end
 
+
+"""
+    JobCancelledError(msg::AbstractString)
+
+Thrown on fetch result from cancelling or cancelled job.
+"""
 struct JobCancelledError <: Exception
     msg :: AbstractString
 end
@@ -291,19 +312,27 @@ function Base.showerror(io::IO, e::JobCancelledError)
     print(io, "JobCancelledError: ", e.msg)
 end
 
+
 """
-    wait(handle::Handle)::Nothing
+    wait(handle::Handle; throw=true)::Nothing
 
 Wait job finalize.
 """
-function Base.wait(handle::Handle)
+function Base.wait(handle::Handle; throw::Bool=true)::Nothing
     lock(handle.lock) do 
-        while ! isfinal(handle)
-            wait(handle.cond)
-        end
+        wait_locked!(handle; throw)
     end
     return nothing
 end
+
+function wait_locked!(handle::Handle; throw::Bool)
+    while ! isfinal(handle)
+        wait(handle.cond)
+    end
+    throw && isfailed(handle) && Base.throw(handle.error)
+    return nothing
+end
+
 
 """
     fetch(handle::Handle)::Any
@@ -311,21 +340,14 @@ end
 Wait job finalize and fetch result or throw error.
 """
 function Base.fetch(handle::Handle)
-    wait(handle)
-    if iscompleted(handle)
-        return handle.result
+    lock(handle.lock) do 
+        wait_locked!(handle; throw=true)
+        (iscompleted(handle) || isstopped(handle))&& return handle.result
+        iscanceled(handle) && throw(JobCancelledError(
+            "Job was cancelled",
+        ))
+        throw(ExecutorInternalError(
+            "Wrong job state: `$(@atomic(handle.state))`"
+        ))
     end
-    if handle.__dbg
-        @error "Handle trace" handle.trace
-    end
-    isfailed(handle) && throw(CapturedException(
-        handle.error,
-        handle.trace,
-    ))
-    iscanceled(handle) && throw(JobCancelledError(
-        "Job was cancelled",
-    ))
-    throw(ExecutorInternalError(
-        "Something wrong",
-    ))
 end

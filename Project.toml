@@ -1,7 +1,10 @@
 name = "JackBaboon"
 uuid = "e5cb0571-5e04-44bf-8e3e-d7edd35096c6"
-version = "0.1.1"
+version = "0.2.2"
 authors = ["andreykochegura <andreykochegura@gmail.com>"]
+
+[workspace]
+projects = ["docs"]
 
 [deps]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

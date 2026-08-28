@@ -1,3 +1,6 @@
 *.cov
 *.log
 *.vscode
+docs/build/
+Manifest.toml
+benchmarks/

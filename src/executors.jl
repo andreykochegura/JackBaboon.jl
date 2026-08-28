@@ -1,34 +1,82 @@
 # SPDX-License-Identifier: MIT
 
-module ExecutorStatuses
-    @enum Status::UInt8 begin
+module ExecutorStates
+    @enum State::UInt8 begin
         Open
         Closed
         Failed
     end
 end
 
+
+"""
+    ExecutorInternalError(msg::AbstractString)
+
+Thrown on an internal executor error.
+"""
+struct ExecutorInternalError <: Exception  # TuberculosisError
+    msg :: AbstractString
+    ex  :: Union{Nothing, CapturedException}
+
+    ExecutorInternalError(msg) = new(msg, nothing)
+    ExecutorInternalError(msg, ex, bt) = new(msg, CapturedException(ex, bt))
+end
+
+function Base.showerror(io::IO, ex::ExecutorInternalError)
+    print(io, "ExecutorInternalError: ", ex.msg)
+    ex.ex === nothing && return
+    print(io, "\nCaused by: ")
+    showerror(io, ex.ex.ex, ex.ex.processed_bt)
+end
+
+
+
+"""
+    Executor(;
+        pool         :: Symbol  = :default,
+        capacity   :: Integer = 8,
+        concurrently :: Integer = 1,
+    )
+
+Create and run executor with limited concurrency.
+
+# Arguments
+
+- `pool`: thread pool; supported: `:default`, `:interactive`.
+- `capacity`: maximum number of queued jobs; new jobs are rejected when queue is full.
+- `concurrently`: maximum number of jobs executing concurrently.
+"""
 mutable struct Executor
-    const   lock        :: ReentrantLock
-    const   pool        :: Symbol
-    const   sem         :: Base.Semaphore
-    const   queue       :: Channel{Job}
-    dispatcher          :: Union{Nothing, Task}
-    error               :: Union{Nothing, Any}
-    trace               :: Union{Nothing, Vector}
-    @atomic status      :: ExecutorStatuses.Status
+    const   lock         :: ReentrantLock
+    const   pool         :: Symbol
+    const   capacity     :: Int
+    const   concurrently :: Int
+    const   sem          :: Base.Semaphore
+    const   queue        :: Channel{Job}
+    const   errors       :: Vector{ExecutorInternalError}
+    @atomic state        :: ExecutorStates.State
+    dispatcher           :: Union{Nothing, Task}
+end
+
+function Base.show(io::IO, ::MIME"text/plain", e::Executor)
+    state = @atomic e.state
+    print(io, "Executor(;")
+    printstyled(io, " #=", state, "=# "; color=:light_black)
+    print(io, "pool=", repr(e.pool), ", ")
+    print(io, "capacity=", e.capacity, ", ")
+    print(io, "concurrently=", e.concurrently, ")")
 end
 
 function Executor(;
     pool         :: Symbol  = :default,
-    queue_size   :: Integer = 8,
+    capacity     :: Integer = 8,
     concurrently :: Integer = 1,
 )
     pool in (:default, :interactive) || throw(ArgumentError(
-        "`pool` must be one of (:default, :interactive), got: $(repr(pool))",
+        "`pool` must be `:default` or `:interactive`, got: $(repr(pool))",
     ))
-    queue_size > 0 || throw(ArgumentError(
-        "`queue_size` must be positive, got $queue_size",
+    capacity > 0 || throw(ArgumentError(
+        "`capacity` must be positive, got $capacity",
     ))
     concurrently > 0 || throw(ArgumentError(
         "`concurrently` must be positive, got $concurrently",
@@ -36,16 +84,18 @@ function Executor(;
     executor = Executor(
         ReentrantLock(),
         pool,
+        capacity,
+        concurrently,
         Semaphore(concurrently),
-        Channel{Job}(queue_size),
+        Channel{Job}(capacity),
+        ExecutorInternalError[],
+        ExecutorStates.Open,
         nothing,  # dispatcher
-        nothing,  # error
-        nothing,  # trace
-        ExecutorStatuses.Open,
     )
     dispatch!(executor)
     return executor
 end
+
 
 """
     isopen(executor::Executor)::Bool
@@ -53,7 +103,8 @@ end
 Returns `true` if executor is ready to accept jobs.
 """
 Base.isopen(executor::Executor)::Bool =
-    ExecutorStatuses.Open == @atomic executor.status
+    ExecutorStates.Open == @atomic executor.state
+
 
 """
     iscrashed(executor::Executor)::Bool
@@ -61,7 +112,8 @@ Base.isopen(executor::Executor)::Bool =
 Returns `true` if executor is crashed.
 """
 iscrashed(executor::Executor)::Bool =
-    ExecutorStatuses.Failed == @atomic executor.status
+    ExecutorStates.Failed == @atomic executor.state
+
 
 """
     isclosed(executor::Executor)::Bool
@@ -69,16 +121,8 @@ iscrashed(executor::Executor)::Bool =
 Returns `true` if executor is closed.
 """
 isclosed(executor::Executor)::Bool =
-    ExecutorStatuses.Closed == @atomic executor.status
+    ExecutorStates.Closed == @atomic executor.state
 
-
-struct ExecutorInternalError <: Exception
-    msg :: AbstractString
-end
-
-function Base.showerror(io::IO, e::ExecutorInternalError)
-    print(io, "ExecutorInternalError: ", e.msg)
-end
 
 function dispatch!(executor::Executor)
     lock(executor.lock) do
@@ -90,79 +134,121 @@ function dispatch!(executor::Executor)
                 try
                     try_pending!(job.handle) || continue  # skip canceled 
                     acquire(executor.sem)
-                    async_execute!(job.f, job.handle, executor.sem, executor.pool)  # release here
-                catch ex
-                    try
-                        set_error_force!(job.handle, ExecutorInternalError(
-                            "Executor dispatcher error",
-                        ))
-                        lock(executor.lock) do 
-                            close(executor.queue)
-                            executor.error = ex
-                            executor.trace = catch_backtrace()
-                            executor.status = ExecutorStatuses.Failed
-                        end
-                        for job in executor.queue
-                            set_error_force!(job.handle, ExecutorInternalError(
-                                "Executor dispatcher error",
-                            ))
-                        end
-                    catch
-                        # pass
-                    end
-                    rethrow()
+                    async_execute!(job.f, job.handle, executor.sem, executor.pool)  # release(sem) here
+                catch dispatch_ex
+                    try_cleanup!(executor, job, dispatch_ex)
+                    throw(ExecutorInternalError(
+                        "Executor dispatch error; see `executor.errors`",
+                    ))
                 end
             end
         end
     end
     return executor
 end
+# in catch block
+function try_cleanup!(executor::Executor, job, dispatch_ex)
+    lock(executor.lock) do
+        try
+            close(executor.queue)
+            @atomic executor.state = ExecutorStates.Failed
+            dispatch_err = ExecutorInternalError("Executor dispatch error", dispatch_ex, catch_backtrace())
+            push!(executor.errors, dispatch_err)
+            set_error_force!(job.handle, dispatch_err)
+            for job in executor.queue
+                set_error_force!(job.handle, dispatch_err)
+            end
+        catch cleanup_ex
+            cleanup_err = ExecutorInternalError("Executor cleanup error", cleanup_ex, catch_backtrace())
+            push!(executor.errors, cleanup_err)
+        end
+    end 
+end
 
 
 """
-    close(executor::Executor)
+    close(executor::Executor)::Executor
 
-Stop accepting new jobs; accepted jobs are finalize; jobs completion is a user responsibility.
+Graceful shutdown; immediately stop accepting new jobs; accepted jobs are finalize.
 """
 function Base.close(executor::Executor)
     lock(executor.lock) do
         if isclosed(executor)
-            # pass
+            #pass
         elseif isopen(executor)
             close(executor.queue)
-            @atomic executor.status = ExecutorStatuses.Closed
+            @atomic executor.state = ExecutorStates.Closed
         elseif iscrashed(executor)
-            throw(CapturedException(executor.error, executor.trace))
+            throw_error(executor)
         else
             throw(ExecutorInternalError(
-                "Unknown error",
+                "Wrong executor state: `$(@atomic(executor.state))`",
             ))
         end
     end
     return executor
 end
 
+function throw_error(executor::Executor)
+    length(executor.errors) == 1 ?
+        throw(only(executor.errors)) :
+        throw(CompositeException(executor.errors))
+end
+
+
+#Future
+#terminate!(::Executor)
+
+
+function with_executor(
+    @nospecialize(f),
+    ;
+    pool         :: Symbol  = :default,
+    capacity     :: Integer = 8,
+    concurrently :: Integer = 1,
+)
+    executor = Executor(; pool, capacity, concurrently)
+    try
+        f(executor)
+    finally
+        close(executor)
+    end
+end
+
+
 
 """
-    execute!(@nospecialize(f), executor::Executor; __dbg::Bool=false)
+    execute!(@nospecialize(f), executor::Executor)
 
-Synchronous execution; `__dbg` enables `Handle` trace collection and shows it on errors.
+Synchronous concurrently execution.
 
 # Examples
 
-```julia
-julia> result = execute!(executor) do
-           2
+```julia-repl
+julia> result = execute!(executor) do cancel_token
+           do_work()
        end;
-2
+julia> result = execute!(executor) do cancel_token
+           error("Job error")
+       end;
+ERROR: Job error
+Stacktrace:
+ [1] error()
+ ...
 ```
 """
-function execute!(@nospecialize(f), executor::Executor; __dbg::Bool=false)
-    handle = submit!(f, executor; __dbg)
+function execute!(@nospecialize(f), executor::Executor)
+    handle = submit!(f, executor)
     result = fetch(handle)
     return result
 end
 
+
+"""
+    ExecutorClosedError(msg::AbstractString)
+
+Thrown on a job submitting to a closed executor.
+"""
 struct ExecutorClosedError <: Exception
     msg :: AbstractString
 end
@@ -171,6 +257,12 @@ function Base.showerror(io::IO, e::ExecutorClosedError)
     print(io, "ExecutorClosedError: ", e.msg)
 end
 
+
+"""
+    ExecutorRejectedError(msg::AbstractString)
+
+Thrown on a job submitting to an executor with a full queue.
+"""
 struct ExecutorRejectedError <: Exception
     msg :: AbstractString
 end
@@ -181,40 +273,45 @@ end
 
 
 """
-    submit!(@nospecialize(f), executor::Executor; __dbg::Bool=false)::Handle
+    submit!(@nospecialize(f), executor::Executor)::Handle
 
-Asynchronous execution; `__dbg` enables `Handle` trace collection and shows it on `Base.fetch(handle)` errors.
+Asynchronous concurrently execution.
 
 # Examples
 
-```julia
-julia> handle = submit!(executor) do
-           1
-       end
-
+```julia-repl
+julia> handle = submit!(executor) do cancel_token
+           do_work()
+       end;
+julia> result = fetch(handle);
+julia> handle = submit!(executor) do cancel_token
+           error("Job error")
+       end;
 julia> fetch(handle)
-1
+ERROR: Job error
+Stacktrace:
+ [1] error(s::String)
+ ...
 ```
 """
-function submit!(@nospecialize(f), executor::Executor; __dbg::Bool=false)::Handle
-    hasmethod(f, Tuple{CancelToken}) || throw(ArgumentError(
-        "submitted  function must accept a `CancelToken`; look submit!() doc and use `do` block.",
-    ))
+function submit!(@nospecialize(f), executor::Executor)::Handle
+    hasmethod(f, Tuple{CancelToken}) || throw(MethodError(f, (CancelToken,)))
     lock(executor.lock) do
         queue = executor.queue
-        iscrashed(executor) && throw(ExecutorInternalError(
-            "Executor is failed"
-        ))
         isclosed(executor) && throw(ExecutorClosedError(
             "Executor is closed",
+            ))
+        iscrashed(executor) && throw_error(executor)
+        istaskfailed(executor.dispatcher) && throw(ExecutorInternalError(
+            "Executor dispatcher unexpected crash; see `executor.dispatcher`", 
         ))
         isfull(queue) && throw(ExecutorRejectedError(
             "Executor queue is full",
         ))
         isopen(queue) || throw(ExecutorInternalError(
-            "Unknown error"
+            "Executor queue is closed; executor state: `$(@atomic(executor.state))`",
         ))
-        job = Job(f; __dbg)
+        job = Job(f)
         put!(queue, job)
         return job.handle
     end

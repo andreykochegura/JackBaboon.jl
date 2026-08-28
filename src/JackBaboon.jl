@@ -14,28 +14,32 @@ export
     execute!,
     submit!,
 
+    # CancelToken
+    iscancelrequested,
+
     #Handle
-    cancel!,
-    iscreated,
+    stop!,
     isqueued,
     ispending,
     isrunning,
     isfailed,
     iscompleted,
-    iscancelling,
+    isstopping,
+    isstopped,
     iscanceled,
     isfinal,
 
     ExecutorInternalError,
     ExecutorClosedError,
-    ExecutorTerminatedError,
     ExecutorRejectedError,
     JobCancelledError
 
 
-include("cancel_tokens.jl")
-include("transitions.jl")
+include("cancel_token.jl")
+include("state_machines.jl")
+include("tracing.jl")
 include("handles.jl")
+include("jobs.jl")
 include("executors.jl")
 
 
