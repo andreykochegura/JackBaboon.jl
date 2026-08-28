@@ -4,10 +4,10 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
-permissions:
-  contents: read
 jobs:
   test:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -27,6 +27,8 @@ jobs:
         with:
           files: ${{ steps.coverage.outputs.file }}
   docs:
+    permissions:
+      contents: write
     needs: test
     runs-on: ubuntu-latest
     steps:
