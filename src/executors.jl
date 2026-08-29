@@ -34,7 +34,7 @@ end
 """
     Executor(;
         pool         :: Symbol  = :default,
-        capacity   :: Integer = 8,
+        capacity     :: Integer = 8,
         concurrently :: Integer = 1,
     )
 
@@ -228,6 +228,7 @@ Synchronous concurrently execution.
 julia> result = execute!(executor) do cancel_token
            do_work()
        end;
+
 julia> result = execute!(executor) do cancel_token
            error("Job error")
        end;

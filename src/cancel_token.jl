@@ -15,6 +15,7 @@ Return `true` if stop has been requested for the job.
 # Examples
 ```julia-repl
 julia> executor = Executor();
+
 julia> handle = submit!(executor) do cancel_token
         while ! iscancelrequested(cancel_token)
             do_work()
@@ -22,8 +23,11 @@ julia> handle = submit!(executor) do cancel_token
         end
         nothing
     end;
+
 julia> stop!(handle);
+
 julia> wait(handle)
+
 julia> iscanceled(handle)
 true
 ```
