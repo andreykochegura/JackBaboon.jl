@@ -284,10 +284,13 @@ Asynchronous concurrently execution.
 julia> handle = submit!(executor) do cancel_token
            do_work()
        end;
+    
 julia> result = fetch(handle);
+
 julia> handle = submit!(executor) do cancel_token
            error("Job error")
        end;
+
 julia> fetch(handle)
 ERROR: Job error
 Stacktrace:
