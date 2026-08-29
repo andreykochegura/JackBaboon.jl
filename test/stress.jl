@@ -6,7 +6,7 @@ include("common.jl")
     job_num = 1 << 20
     e = Executor(
         pool         = :default,
-        capacity   = job_num ÷ 2,
+        queue_capacity   = job_num ÷ 2,
         concurrently = Threads.nthreads(:default) * 2,
     )
     try

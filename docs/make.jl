@@ -11,6 +11,8 @@ makedocs(
     format = Documenter.HTML(),
 )
 
-deploydocs(
-    repo = "github.com/andreykochegura/JackBaboon.jl.git",
-)
+if get(ENV, "JACKBABOON_DOCS_DEPLOY", "local") == "true"
+    deploydocs(
+        repo = "github.com/andreykochegura/JackBaboon.jl.git"
+    )
+end

@@ -72,7 +72,7 @@ function Handle()
         CancelToken(),
         cond,
         lock,
-        DEFAULT_JOB_TRACE_ENABLED[],
+        is_job_global_tracing_on(),
         JobEvent[],
         nothing,
         nothing,
@@ -190,7 +190,7 @@ function trace_locked!(handle::Handle)
     push!(handle.dbg_trace, JobEvent(
         handle.job_uuid,
         next_job_trace_global_sequence(),
-        time_ns(),   # different across different threads and reset every few years
+        time_ns(),   # NOTE: not global ordering primitive and reset every few years
         iscancelrequested(handle.cancel_token),
         handle.result,
         handle.error,
@@ -278,7 +278,23 @@ end
 """
     stop!(handle::Handle)::Handle
 
-Job stopping; job completion is a user responsibility.
+Request a cancel; the job completion is a user responsibility.
+
+# Examples
+
+```julia-repl
+julia> handle = submit!(executor) do cancel_token
+           while ! iscancelrequested(cancel_token)
+                sleep(0.1)
+           end
+           iscancelrequested ? "job is stopped" : "job is completed"
+       end;
+
+julia> stop!(handle);
+
+julia> fetch(handle)
+"job is stopped"
+```
 """
 function stop!(handle::Handle)
     lock(handle.lock) do

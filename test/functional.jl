@@ -8,14 +8,14 @@ end
 
 @testset "Backpressure" begin
     default = Executor(
-        pool         = :default,
-        capacity     = 1 << 20,
-        concurrently = Threads.nthreads(:default),
+        pool           = :default,
+        queue_capacity = 1 << 20,
+        concurrently   = Threads.nthreads(:default),
     )
     interactive = Executor(
-        pool         = :interactive,
-        capacity     = 1 << 20,
-        concurrently = Threads.nthreads(:interactive) - 1, # -1 for dispatcher
+        pool           = :interactive,
+        queue_capacity = 1 << 20,
+        concurrently   = Threads.nthreads(:interactive) - 1, # -1 for dispatcher
     )
     try
         job_num = 1 << 20

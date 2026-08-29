@@ -5,7 +5,7 @@ include("common.jl")
 enable_job_global_tracing()
 
 @testset "Queued → Pending → Running → Completed" begin
-    with_executor(; capacity=1, concurrently=1) do e
+    with_executor(; queue_capacity=1, concurrently=1) do e
         event = Base.Event(true)
         h1 = submit!(e) do c; wait(event) end
         wait_running(h1)
@@ -29,7 +29,7 @@ enable_job_global_tracing()
 end
 
 @testset "Queued → Canceled" begin
-    with_executor(; capacity=1, concurrently=1) do e
+    with_executor(; queue_capacity=1, concurrently=1) do e
         event = Base.Event()
         h1 = submit!(e) do c; wait(event) end
         wait_running(h1)
@@ -48,7 +48,7 @@ end
 end
 
 @testset "Pending → Canceled" begin
-    with_executor(; capacity=1, concurrently=1) do e
+    with_executor(; queue_capacity=1, concurrently=1) do e
         event = Base.Event()
         h = submit!(e) do c; wait(event) end
         wait_running(h)
@@ -66,7 +66,7 @@ end
 end
 
 @testset "Running → Stopping → Stopped" begin
-    with_executor(; capacity=1, concurrently=1) do e
+    with_executor(; queue_capacity=1, concurrently=1) do e
         event = Base.Event()
         transit = submit!(e) do c; wait(event) end
         wait_running(transit)
@@ -85,7 +85,7 @@ end
 end
 
 @testset "Running → Fail" begin
-    with_executor(; capacity=1, concurrently=1) do e
+    with_executor(; queue_capacity=1, concurrently=1) do e
         event = Base.Event()
         transit = submit!(e) do c; wait(event); error() end
         wait_running(transit)
@@ -100,7 +100,7 @@ end
 end
 
 @testset "Running → Stopping → Fail" begin
-    with_executor(; capacity=1, concurrently=1) do e
+    with_executor(; queue_capacity=1, concurrently=1) do e
         event = Base.Event()
         transit = submit!(e) do c; wait(event); error() end
         wait_running(transit)

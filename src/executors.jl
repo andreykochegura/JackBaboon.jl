@@ -14,7 +14,7 @@ end
 
 Thrown on an internal executor error.
 """
-struct ExecutorInternalError <: Exception  # TuberculosisError
+struct ExecutorInternalError <: Exception  # aka TuberculosisError
     msg :: AbstractString
     ex  :: Union{Nothing, CapturedException}
 
@@ -33,9 +33,9 @@ end
 
 """
     Executor(;
-        pool         :: Symbol  = :default,
-        capacity     :: Integer = 8,
-        concurrently :: Integer = 1,
+        pool           :: Symbol  = :default,
+        queue_capacity :: Integer = 8,
+        concurrently   :: Integer = 1,
     )
 
 Create and run executor with limited concurrency.
@@ -43,19 +43,19 @@ Create and run executor with limited concurrency.
 # Arguments
 
 - `pool`: thread pool; supported: `:default`, `:interactive`.
-- `capacity`: maximum number of queued jobs; new jobs are rejected when queue is full.
+- `queue_capacity`: maximum number of queued jobs; new jobs are rejected when queue is full.
 - `concurrently`: maximum number of jobs executing concurrently.
 """
 mutable struct Executor
-    const   lock         :: ReentrantLock
-    const   pool         :: Symbol
-    const   capacity     :: Int
-    const   concurrently :: Int
-    const   sem          :: Base.Semaphore
-    const   queue        :: Channel{Job}
-    const   errors       :: Vector{ExecutorInternalError}
-    @atomic state        :: ExecutorStates.State
-    dispatcher           :: Union{Nothing, Task}
+    const   lock           :: ReentrantLock
+    const   pool           :: Symbol
+    const   queue_capacity :: Int
+    const   concurrently   :: Int
+    const   sem            :: Base.Semaphore
+    const   queue          :: Channel{Job}
+    const   errors         :: Vector{ExecutorInternalError}
+    @atomic state          :: ExecutorStates.State
+    dispatcher             :: Union{Nothing, Task}
 end
 
 function Base.show(io::IO, ::MIME"text/plain", e::Executor)
@@ -63,20 +63,20 @@ function Base.show(io::IO, ::MIME"text/plain", e::Executor)
     print(io, "Executor(;")
     printstyled(io, " #=", state, "=# "; color=:light_black)
     print(io, "pool=", repr(e.pool), ", ")
-    print(io, "capacity=", e.capacity, ", ")
+    print(io, "queue_capacity=", e.queue_capacity, ", ")
     print(io, "concurrently=", e.concurrently, ")")
 end
 
 function Executor(;
-    pool         :: Symbol  = :default,
-    capacity     :: Integer = 8,
-    concurrently :: Integer = 1,
+    pool           :: Symbol  = :default,
+    queue_capacity :: Integer = 8,
+    concurrently   :: Integer = 1,
 )
     pool in (:default, :interactive) || throw(ArgumentError(
         "`pool` must be `:default` or `:interactive`, got: $(repr(pool))",
     ))
-    capacity > 0 || throw(ArgumentError(
-        "`capacity` must be positive, got $capacity",
+    queue_capacity > 0 || throw(ArgumentError(
+        "`queue_capacity` must be positive, got $queue_capacity",
     ))
     concurrently > 0 || throw(ArgumentError(
         "`concurrently` must be positive, got $concurrently",
@@ -84,10 +84,10 @@ function Executor(;
     executor = Executor(
         ReentrantLock(),
         pool,
-        capacity,
+        queue_capacity,
         concurrently,
         Semaphore(concurrently),
-        Channel{Job}(capacity),
+        Channel{Job}(queue_capacity),
         ExecutorInternalError[],
         ExecutorStates.Open,
         nothing,  # dispatcher
@@ -169,7 +169,7 @@ end
 """
     close(executor::Executor)::Executor
 
-Graceful shutdown; immediately stop accepting new jobs; accepted jobs are finalize.
+Graceful shutdown; immediately stop accepting new jobs; accepted jobs are finalize asynchronously but executor does not wait.
 """
 function Base.close(executor::Executor)
     lock(executor.lock) do
@@ -199,15 +199,15 @@ end
 #Future
 #terminate!(::Executor)
 
-
+#Future
 function with_executor(
     @nospecialize(f),
     ;
     pool         :: Symbol  = :default,
-    capacity     :: Integer = 8,
+    queue_capacity     :: Integer = 8,
     concurrently :: Integer = 1,
 )
-    executor = Executor(; pool, capacity, concurrently)
+    executor = Executor(; pool, queue_capacity, concurrently)
     try
         f(executor)
     finally

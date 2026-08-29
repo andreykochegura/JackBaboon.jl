@@ -23,8 +23,8 @@ end
 
 @testset "Arguments validation" begin
     @test_throws ArgumentError Executor(; pool = :qwerty)
-    @test_throws ArgumentError Executor(; capacity = 0)
-    @test_throws ArgumentError Executor(; capacity = -1)
+    @test_throws ArgumentError Executor(; queue_capacity = 0)
+    @test_throws ArgumentError Executor(; queue_capacity = -1)
     @test_throws ArgumentError Executor(; concurrently = 0)
     @test_throws ArgumentError Executor(; concurrently = -1)
     e = Executor()
@@ -59,7 +59,7 @@ end
 end
 
 @testset "Fetch error" begin
-    with_executor(; capacity=8, concurrently=2) do e
+    with_executor(; queue_capacity=8, concurrently=2) do e
         try
             fetch(submit!(e) do c; error() end)
         catch ex
@@ -71,7 +71,7 @@ end
 end
 
 @testset "Graceful shutdown" begin
-    with_executor(; capacity=8, concurrently=2) do e
+    with_executor(; queue_capacity=8, concurrently=2) do e
         event = Base.Event()
         handles = Handle[]
         for _ in 1:8
@@ -94,7 +94,7 @@ end
 end
 
 @testset "Reject" begin
-    with_executor(; capacity=1, concurrently=1) do e
+    with_executor(; queue_capacity=1, concurrently=1) do e
         event = Base.Event()
         h1 = submit!(e) do c; wait(event); end
         wait_running(h1)
@@ -113,10 +113,10 @@ end
 end
 
 @testset "Concurrent" begin
-    with_executor(; capacity=1000, concurrently=2) do e
+    with_executor(; queue_capacity=1000, concurrently=2) do e
         counter = AtomicCounter()
         handles = Handle[]
-        for _ in 1:e.capacity
+        for _ in 1:e.queue_capacity
             try
                 h = submit!(e) do c
                     try
@@ -140,7 +140,7 @@ end
 end
 
 @testset "Concurrent submission" begin
-    with_executor(; capacity=8, concurrently=2) do e
+    with_executor(; queue_capacity=8, concurrently=2) do e
         job_num, task_num = 20, 100
         handles = Channel{Handle}(job_num * task_num)
         exceptions = Channel{Any}(job_num * task_num)
@@ -175,10 +175,10 @@ end
 end
 
 @testset "Concurrent submission and shutdown" begin
-    with_executor(; capacity=2000, concurrently=2) do e
+    with_executor(; queue_capacity=2000, concurrently=2) do e
         job_num, task_num = 20, 100
-        handles = Channel{Handle}(e.capacity)
-        exceptions = Channel{Any}(e.capacity)
+        handles = Channel{Handle}(e.queue_capacity)
+        exceptions = Channel{Any}(e.queue_capacity)
         @sync for _ in 1:task_num
             Threads.@spawn begin
                 for i in 1:job_num

@@ -1,5 +1,5 @@
-[![Tests](https://github.com/andreykochegura/JackBaboon/actions/workflows/CI.yml/badge.svg)](https://github.com/andreykochegura/JackBaboon/actions/workflows/CI.yml)
-[![Coverage](https://codecov.io/gh/andreykochegura/JackBaboon/branch/master/graph/badge.svg)](https://codecov.io/gh/andreykochegura/JackBaboon.jl)
+[![CI](https://github.com/andreykochegura/JackBaboon/actions/workflows/CI.yml/badge.svg)](https://github.com/andreykochegura/JackBaboon/actions/workflows/CI.yml)
+[![Coverage](https://codecov.io/gh/andreykochegura/JackBaboon.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/andreykochegura/JackBaboon.jl)
 [![Docs](https://img.shields.io/badge/docs-stable-blue)](https://andreykochegura.github.io/JackBaboon.jl/)
 [![Julia](https://img.shields.io/badge/Julia-%E2%89%A51.10-purple)](https://julialang.org/)
 [![Status](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/andreykochegura/JackBaboon.jl)
@@ -11,27 +11,29 @@
 
 <div style="display:flex; align-items:center; gap:24px;">
 <div style="flex:1; min-width:0;">
-JackBaboon is a production-oriented Julia executor:
+JackBaboon.jl is a production-oriented Julia executor:
 
-- Bounded job queue, concurrency and rejection.
-- Synchronous and asynchronous thread-pool execution.
+- Bounded queue with controlled concurrency and backpressure.
+- Synchronous and asynchronous job execution.
 - Cooperative job cancellation.
 - Explicit job state machine.
-- Graceful <!-- and immediate. -->shutdown.
-- Fail-safe execution.
+- Graceful shutdown.
+- Isolated job failures.
 </div>
 <div style="flex:0 1 320px; min-width:350px;">
 <img src="images/Jack&amp;James.jpg" alt="Jack & James" style="display:block; width:100%; height:auto;">
 </div>
 </div>
 
-## Install
+## Fast Start
+
+### Install
 
 ```julia-repl
 julia>] add https://github.com/andreykochegura/JackBaboon.jl
 ```
 
-## Fast Start
+### Example
 
 <div style="display:flex; align-items:center; gap:24px;">
 <div style="flex:1; min-width:0;">
@@ -39,11 +41,16 @@ julia>] add https://github.com/andreykochegura/JackBaboon.jl
 ```julia-repl
 julia> using JackBaboon
 
-julia> executor = Executor();
+julia> executor = Executor(
+           pool           = :default,
+           queue_capacity = 8,
+           concurrently   = 2,
+       );
 
 julia> result = execute!(executor) do cancel_token
-           do_work()
+           2+3
        end;
+5
 ```
 </div>
 <div style="flex:0 1 320px; min-width:350px;">
@@ -53,13 +60,36 @@ julia> result = execute!(executor) do cancel_token
 
 ## Execution Model
 
-A task is created for each running job. Worker-tasks are intentionally not used:
+### Capacity & Backpressure
 
-* A worker may become thread-affine and introduce unpredictable delays.
-* A worker may retain contaminated or unexpected execution context.
-* A worker may fail, stall, or become a source of cascading failures.
+* The `Executor` maintains a bounded queue of accepted jobs..
+* The executor queue is bounded by `queue_capacity`.
+* When the **queue** reaches `queue_capacity`, new jobs are rejected with `ExecutorRejectedError`.
+* The number of concurrently executing jobs is bounded by `concurrently`.
+* A job becomes `Pending` before acquiring an execution slot.
 
-#### State Machine Diagram
+### Why without workers?
+
+A task is created for each running job. Persistent worker tasks are intentionally not used:
+
+* Worker tasks may become thread-affine and reduce scheduling flexibility.
+* Worker tasks may retain unintended task-local execution context between jobs.
+* Worker tasks may fail, stall, or become a source of cascading failures.
+
+### Job Lifecycle
+
+Each accepted job follows a lifecycle represented by a state machine diagram.
+
+- `Queued`: the job has been accepted and is waiting in the executor queue.
+- `Pending`: the job has been admitted by the dispatcher and is waiting for an execution slot.
+- `Running`: the job is executing.
+- `Stopping`: cancellation has been requested for a running job; job completion is the user's responsibility.
+- `Stopped`: a `Running` job completed after a cancellation request.
+- `Canceled`: a `Queued` or `Pending` job was canceled before it became `Running`.
+- `Completed`: the job completed successfully.
+- `Failed`: the job terminated due to a job error or an executor dispatcher error.
+
+### State Machine Diagram
 
 ```mermaid
     stateDiagram-v2
@@ -81,34 +111,32 @@ A task is created for each running job. Worker-tasks are intentionally not used:
     class Stopped stopped
     class Canceled canceled
 
-    [*] --> Queued
-    Queued --> Pending
-    Queued --> Canceled
-    Pending --> Running
-    Pending --> Canceled
-    Running --> Stopping
-    Running --> Failed
-    Running --> Completed
-    Stopping --> Stopped
-    Stopping --> Failed
+    [*] --> Queued: user submit!() or execute!()
+    Queued --> Pending: taken by dispatcher from queue
+    Queued --> Canceled: user stop!()
+    Pending --> Running: placed by dispatcher into execution slot
+    Pending --> Canceled: user stop!()
+    Running --> Stopping: user stop!()
+    Running --> Failed: job error or executor failure
+    Running --> Completed: job completed
+    Stopping --> Stopped: job completed
+    Stopping --> Failed: job or dispatcher error
     Stopped --> [*]
     Canceled --> [*]
     Completed --> [*]
     Failed --> [*]
 ```
 
-## Future
+
+## Planned
 
 <div style="display:flex; align-items:center; gap:24px;">
 <div style="flex:1; min-width:0;">
 
-- Immediate shutdown
-- Detailed examples
-- Benchmarks
-- Metrics
-- Prioritet
-- Pause and resume
-- Etc.
+- Metrics.
+- Priorities.
+- Pause and resume.
+- Diagnostic warnings.
 
 </div>
 <div style="flex:0 1 320px; min-width:350px;">
