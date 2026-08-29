@@ -7,7 +7,7 @@
 
 # JackBaboon.jl
 
-*One day, a Python service, exhausted by CPU-bound load, decided to shift some of it to a Julia microservice and breathed a sigh of relief. Countless overjoyed service users launched countless Python coroutines, and those launched countless Julia tasks... And then JackBaboon and his legless master came to the rescue!*
+*One day, a Python service, exhausted by CPU-bound load, decided to shift some of it to a Julia microservice and breathed a sigh of relief. Countless overjoyed service users launched countless Python coroutines, and those launched countless Julia tasks... And then the baboon and his legless master came to the rescue!*
 
 JackBaboon.jl is a production-oriented Julia executor:
 
