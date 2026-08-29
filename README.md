@@ -9,8 +9,6 @@
 
 *One day, a Python service, exhausted by CPU-bound load, decided to shift some of it to a Julia microservice and breathed a sigh of relief. Countless overjoyed service users launched countless Python coroutines, and those launched countless Julia tasks... And then JackBaboon and his legless master came to the rescue!*
 
-<div style="display:flex; align-items:center; gap:24px;">
-<div style="flex:1; min-width:0;">
 JackBaboon.jl is a production-oriented Julia executor:
 
 - Bounded queue with controlled concurrency and backpressure.
@@ -19,11 +17,8 @@ JackBaboon.jl is a production-oriented Julia executor:
 - Explicit job state machine.
 - Graceful shutdown.
 - Isolated job failures.
-</div>
-<div style="flex:0 1 320px; min-width:350px;">
-<img src="images/Jack&amp;James.jpg" alt="Jack & James" style="display:block; width:100%; height:auto;">
-</div>
-</div>
+
+![Jack&James.jpg](images/Jack&James.jpg)
 
 ## Fast Start
 
@@ -35,9 +30,6 @@ julia>] add https://github.com/andreykochegura/JackBaboon.jl
 
 ### Example
 
-<div style="display:flex; align-items:center; gap:24px;">
-<div style="flex:1; min-width:0;">
-
 ```julia-repl
 julia> using JackBaboon
 
@@ -48,15 +40,24 @@ julia> executor = Executor(
        );
 
 julia> result = execute!(executor) do cancel_token
-           2+3
+           "Job complited"
+       end
+"Job complited"
+
+julia> handle = submit!(executor) do cancel_token
+           while ! iscancelrequested(cancel_token)
+               sleep(0.1)
+           end
+           iscancelrequested(cancel_token) ? "Job stoped" : "Job complited"
        end;
-5
+
+julia> stop!(handle);
+
+julia> fetch(handle)
+"Job stoped"
 ```
-</div>
-<div style="flex:0 1 320px; min-width:350px;">
-<img src="images/Jack&amp;James2.jpg" alt="Jack & James" style="display:block; width:100%; height:auto;">
-</div>
-</div>
+
+![Jack&James2.jpg](images/Jack&James2.jpg)
 
 ## Execution Model
 
@@ -111,16 +112,16 @@ Each accepted job follows a lifecycle represented by a state machine diagram.
     class Stopped stopped
     class Canceled canceled
 
-    [*] --> Queued: user submit!() or execute!()
-    Queued --> Pending: taken by dispatcher from queue
-    Queued --> Canceled: user stop!()
-    Pending --> Running: placed by dispatcher into execution slot
-    Pending --> Canceled: user stop!()
-    Running --> Stopping: user stop!()
+    [*] --> Queued: submit!() or execute!()
+    Queued --> Pending: taken from queue
+    Queued --> Canceled: stop!()
+    Pending --> Running: placed into execution slot
+    Pending --> Canceled: stop!()
+    Running --> Stopping: stop!()
     Running --> Failed: job error or executor failure
     Running --> Completed: job completed
     Stopping --> Stopped: job completed
-    Stopping --> Failed: job or dispatcher error
+    Stopping --> Failed: job error or executor failure
     Stopped --> [*]
     Canceled --> [*]
     Completed --> [*]
@@ -130,19 +131,12 @@ Each accepted job follows a lifecycle represented by a state machine diagram.
 
 ## Planned
 
-<div style="display:flex; align-items:center; gap:24px;">
-<div style="flex:1; min-width:0;">
-
 - Metrics.
 - Priorities.
 - Pause and resume.
 - Diagnostic warnings.
 
-</div>
-<div style="flex:0 1 320px; min-width:350px;">
-<img src="images/Jack&amp;James3.jpg" alt="Jack & James" style="display:block; width:100%; height:auto;">
-</div>
-</div>
+![Jack&James3.jpg](images/Jack&James3.jpg)
 
 ## P.S.
 
