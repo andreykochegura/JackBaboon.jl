@@ -1,8 +1,8 @@
 [![Tests](https://github.com/andreykochegura/JackBaboon/actions/workflows/CI.yml/badge.svg)](https://github.com/andreykochegura/JackBaboon/actions/workflows/CI.yml)
-[![Coverage](https://codecov.io/gh/andreykochegura/JackBaboon/branch/master/graph/badge.svg)](https://codecov.io/gh/andreykochegura/JackBaboon)
+[![Coverage](https://codecov.io/gh/andreykochegura/JackBaboon/branch/master/graph/badge.svg)](https://codecov.io/gh/andreykochegura/JackBaboon.jl)
 [![Docs](https://img.shields.io/badge/docs-stable-blue)](https://andreykochegura.github.io/JackBaboon.jl/)
 [![Julia](https://img.shields.io/badge/Julia-%E2%89%A51.10-purple)](https://julialang.org/)
-[![Status](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/andreykochegura/JackBaboon)
+[![Status](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/andreykochegura/JackBaboon.jl)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 # JackBaboon.jl
@@ -102,13 +102,13 @@ A task is created for each running job. Worker-tasks are intentionally not used:
 <div style="display:flex; align-items:center; gap:24px;">
 <div style="flex:1; min-width:0;">
 
-- immediate shutdown
-- detailed examples
-- benchmarks
-- metrics
-- prioritet
-- pause and resume
-- etc.
+- Immediate shutdown
+- Detailed examples
+- Benchmarks
+- Metrics
+- Prioritet
+- Pause and resume
+- Etc.
 
 </div>
 <div style="flex:0 1 320px; min-width:350px;">
