@@ -1,6 +1,6 @@
 [![Tests](https://github.com/andreykochegura/JackBaboon/actions/workflows/CI.yml/badge.svg)](https://github.com/andreykochegura/JackBaboon/actions/workflows/CI.yml)
 [![Coverage](https://codecov.io/gh/andreykochegura/JackBaboon/branch/master/graph/badge.svg)](https://codecov.io/gh/andreykochegura/JackBaboon)
-[![Docs](https://img.shields.io/badge/docs-stable-blue)](https://andreykochegura.github.io/JackBaboon/)
+[![Docs](https://img.shields.io/badge/docs-stable-blue)](https://andreykochegura.github.io/JackBaboon.jl/)
 [![Julia](https://img.shields.io/badge/Julia-%E2%89%A51.10-purple)](https://julialang.org/)
 [![Status](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/andreykochegura/JackBaboon)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
