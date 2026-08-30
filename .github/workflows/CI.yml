@@ -2,6 +2,11 @@ name: CI
 on:
   push:
     branches: [master]
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'docs/**'
+      - 'Project.toml'
   pull_request:
     branches: [master]
 jobs:
