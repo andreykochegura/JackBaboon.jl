@@ -72,7 +72,7 @@ function Handle()
         CancelToken(),
         cond,
         lock,
-        is_job_global_tracing_on(),
+        is_job_global_dbg_tracing_on(),
         JobEvent[],
         nothing,
         nothing,
@@ -242,6 +242,7 @@ function async_execute!(@nospecialize(f), handle::Handle, sem::Semaphore, pool::
     end
     Threads.@spawn pool begin  # 
         try
+            # may be try_running_task!(handle) ?
             result = try
                 Base.invokelatest(f, handle.cancel_token)
             catch ex

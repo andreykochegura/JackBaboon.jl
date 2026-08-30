@@ -15,8 +15,8 @@ using JackBaboon:
     wait_stopped,
     wait_canceled,
     CancelToken,
-    enable_job_global_tracing,
-    disable_job_global_tracing
+    enable_job_global_dbg_tracing,
+    disable_job_global_dbg_tracing
 
 
 mutable struct AtomicCounter

@@ -5,11 +5,11 @@
 [![Status](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/andreykochegura/JackBaboon.jl)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-# JackBaboon.jl
-
 *One day, a Python service, exhausted by CPU-bound load, decided to shift some of it to a Julia microservice and breathed a sigh of relief. Countless overjoyed service users launched countless Python coroutines, and those launched countless Julia tasks... And then the baboon and his legless master came to the rescue!*
 
-JackBaboon.jl is a production-oriented Julia executor:
+# JackBaboon.jl
+
+A production-oriented Julia executor:
 
 - Bounded queue with controlled concurrency and backpressure.
 - Synchronous and asynchronous job execution.

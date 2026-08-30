@@ -2,7 +2,7 @@
 
 include("common.jl")
 
-enable_job_global_tracing()
+enable_job_global_dbg_tracing()
 
 @testset "Smoke" begin
     with_executor() do e

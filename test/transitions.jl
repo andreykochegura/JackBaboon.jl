@@ -2,7 +2,7 @@
 
 include("common.jl")
 
-enable_job_global_tracing()
+enable_job_global_dbg_tracing()
 
 @testset "Queued → Pending → Running → Completed" begin
     with_executor(; queue_capacity=1, concurrently=1) do e
