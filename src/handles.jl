@@ -50,7 +50,7 @@ mutable struct Handle
     const lock         :: ReentrantLock
     const __dbg        :: Bool
     const dbg_trace    :: Vector{JobEvent}
-    result             :: Union{Nothing, }  # for illustration
+    result             :: Union{Nothing, Any}  # for illustration
     error              :: Union{Nothing, Exception}  # CapturedException <: Exception
     @atomic state     :: HandleStates.State
 end
