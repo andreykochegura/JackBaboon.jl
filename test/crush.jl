@@ -39,3 +39,5 @@ enable_job_global_dbg_tracing()
         @test_throws CompositeException close(e)
     end
 end
+
+disable_job_global_dbg_tracing()

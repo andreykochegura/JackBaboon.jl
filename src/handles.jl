@@ -26,12 +26,10 @@ can_transit(from::State, to::State) =
     StateMachines.can_transit(STATE_MACHINE, from, to)
 check_transit(from::State, to::State) =
     StateMachines.check_transit(STATE_MACHINE, from, to)
-can_reach(from::State, to::State) =
+can_reach(from::State, to::State) = 
     StateMachines.can_reach(STATE_MACHINE, from, to)
 is_terminal(state::State) =
     StateMachines.is_terminal(STATE_MACHINE, state)
-can_precede(from::State, to::State) = 
-    StateMachines.can_precede(STATE_MACHINE, from, to)
 end
 
 
@@ -84,7 +82,7 @@ end
 
 function wait_state(h::Handle, state::HandleStates.State)
     lock(h.lock) do
-        while ! (@atomic(h.state) == state || HandleStates.can_precede(@atomic(h.state), state))
+        while ! (@atomic(h.state) == state || HandleStates.can_reach(state, @atomic(h.state)))
             wait(h.cond)
         end
     end
@@ -198,13 +196,6 @@ function trace_locked!(handle::Handle)
     return handle
 end
 
-function set_state!(handle::Handle, state::HandleStates.State)
-    lock(handle.lock) do 
-        transit_locked!(handle, state)
-    end
-    return handle
-end
-
 function set_failed!(handle::Handle, ex, bt::Vector=[])
     lock(handle.lock) do
         handle.error = CapturedException(ex, bt)
@@ -236,7 +227,6 @@ function async_execute!(@nospecialize(f), handle::Handle, sem::Semaphore, pool::
     end
     Threads.@spawn pool begin  # 
         try
-            # may be try_running_task!(handle) ?
             result = try
                 Base.invokelatest(f, handle.cancel_token)
             catch ex

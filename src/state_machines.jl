@@ -6,7 +6,6 @@ export
     StateMachine,
     check_reached,
     can_reach,
-    can_precede,
     get_reachabilities,
     can_transit,
     check_transit,
@@ -56,8 +55,6 @@ end
 function can_reach(sm::StateMachine{S}, from::S, to::S) where {S}
     return to in sm.reachabilities[from]
 end
-
-can_precede(sm::StateMachine{S}, from::S, to::S)  where {S} = can_reach(sm, to, from)
 
 function get_reachabilities(transitions::Dict{S, Set{S}}) where {S}
     states = collect(keys(transitions))

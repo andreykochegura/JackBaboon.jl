@@ -115,11 +115,11 @@ function Executor(;
 end
 
 
-"""
-    metrics(executor::Executor)::NamedTuple
+# """
+#     metrics(executor::Executor)::NamedTuple
 
-Returns a consistent snapshot of executor metrics.
-"""
+# Returns a consistent snapshot of executor metrics.
+# """
 function metrics(executor::Executor)::NamedTuple
     m = executor.metrics
     lock(m.lock) do 

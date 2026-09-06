@@ -230,3 +230,5 @@ end
     s = sprint(show, MIME"text/plain"(), JackBaboon.Handle())
     @test all(occursin.(("JackBaboon.Handle", "#=Queued [", "]=#)"), s))
 end
+
+disable_job_global_dbg_tracing()

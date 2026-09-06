@@ -64,6 +64,8 @@ end
         @test iscanceled(transit)
         notify(event)
         check_trace(transit)
+        @test_throws ExecutorJobCancelledError fetch(transit)
+        @test_throws "Job was cancelled" fetch(transit)
     end
 end
 
@@ -119,3 +121,5 @@ end
         check_trace(transit)
     end
 end
+
+disable_job_global_dbg_tracing()

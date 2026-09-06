@@ -9,6 +9,7 @@ function run_test_process(file_name; threads)
     return nothing
 end
 
+run_test_process("state_machine.jl", threads="2,2")
 run_test_process("base.jl", threads="2,2")
 run_test_process("transitions.jl", threads="2,2")
 run_test_process("crush.jl", threads="2,2")
