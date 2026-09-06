@@ -229,6 +229,10 @@ end
     @test all(occursin.(("Executor", "#=Open=#", "pool=", "queue_capacity=", "concurrently="), s))
     s = sprint(show, MIME"text/plain"(), JackBaboon.Handle())
     @test all(occursin.(("JackBaboon.Handle", "#=Queued [", "]=#)"), s))
+    s = sprint(showerror, ExecutorClosedError("foo"))
+    @test all(occursin.(("ExecutorClosedError", "foo"), s))
+    s = sprint(showerror, ExecutorRejectedError("foo"))
+    @test all(occursin.(("ExecutorRejectedError", "foo"), s))
 end
 
 disable_job_global_dbg_tracing()

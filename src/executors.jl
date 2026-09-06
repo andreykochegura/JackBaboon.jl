@@ -31,20 +31,20 @@ function Base.showerror(io::IO, ex::ExecutorInternalError)
 end
 
 
-mutable struct Metrics
-    const lock :: ReentrantLock
-    submitted  :: Int
-    started    :: Int
-    completed  :: Int
-    failed     :: Int
-    canceled   :: Int
-    stoped     :: Int
-    rejected   :: Int
-    active     :: Int
-    queued     :: Int
+# mutable struct Metrics
+#     const lock :: ReentrantLock
+#     submitted  :: Int
+#     started    :: Int
+#     completed  :: Int
+#     failed     :: Int
+#     canceled   :: Int
+#     stoped     :: Int
+#     rejected   :: Int
+#     active     :: Int
+#     queued     :: Int
 
-    Metrics() = new(ReentrantLock(), 0, 0, 0, 0, 0, 0, 0, 0)
-end
+#     Metrics() = new(ReentrantLock(), 0, 0, 0, 0, 0, 0, 0, 0)
+# end
 
 
 """
@@ -120,21 +120,21 @@ end
 
 # Returns a consistent snapshot of executor metrics.
 # """
-function metrics(executor::Executor)::NamedTuple
-    m = executor.metrics
-    lock(m.lock) do 
-        (;
-            m.submitted,
-            m.started,
-            m.completed,
-            m.failed,
-            m.canceled,
-            m.rejected,
-            m.active,
-            m.queued,
-        )
-    end
-end
+# function metrics(executor::Executor)::NamedTuple
+#     m = executor.metrics
+#     lock(m.lock) do 
+#         (;
+#             m.submitted,
+#             m.started,
+#             m.completed,
+#             m.failed,
+#             m.canceled,
+#             m.rejected,
+#             m.active,
+#             m.queued,
+#         )
+#     end
+# end
 
 
 """
