@@ -228,7 +228,7 @@ function async_execute!(@nospecialize(f), handle::Handle, sem::Semaphore, pool::
     Threads.@spawn pool begin  # 
         try
             result = try
-                Base.invokelatest(f, handle.cancel_token)
+                Base.invokelatest(f, handle.cancel_token)  # @btime Base.invokelatest(identity, 1)  # -> 50 ns
             catch ex
                 set_failed!(handle, ex, catch_backtrace())
                 nothing
