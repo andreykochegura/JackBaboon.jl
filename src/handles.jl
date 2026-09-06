@@ -50,7 +50,7 @@ mutable struct Handle
     const lock         :: ReentrantLock
     const __dbg        :: Bool
     const dbg_trace    :: Vector{JobEvent}
-    result             :: Union{Nothing, Any}  # not baboon code - it's for illustration :)
+    result             :: Union{Nothing, }  # for illustration
     error              :: Union{Nothing, Exception}  # CapturedException <: Exception
     @atomic state     :: HandleStates.State
 end
@@ -225,10 +225,10 @@ function async_execute!(@nospecialize(f), handle::Handle, sem::Semaphore, pool::
         release(sem)
         return nothing  # skip canceled
     end
-    Threads.@spawn pool begin  # 
+    Threads.@spawn pool begin
         try
             result = try
-                Base.invokelatest(f, handle.cancel_token)  # @btime Base.invokelatest(identity, 1)  # -> 50 ns
+                Base.invokelatest(f, handle.cancel_token)  # NOTE: minimal overhead for already compiled functions
             catch ex
                 set_failed!(handle, ex, catch_backtrace())
                 nothing

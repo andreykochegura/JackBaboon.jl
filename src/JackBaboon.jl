@@ -7,17 +7,11 @@ import UUIDs: uuid4, UUID
 
 export
     Executor,
-    #Base.close,
-    #Base.isopen,
     iscrashed,
     isclosed,
     execute!,
     submit!,
-
-    # CancelToken
     iscancelrequested,
-
-    #Handle
     stop!,
     isqueued,
     ispending,
@@ -28,7 +22,6 @@ export
     isstopped,
     iscanceled,
     isfinal,
-
     ExecutorInternalError,
     ExecutorClosedError,
     ExecutorRejectedError,

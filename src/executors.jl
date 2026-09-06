@@ -14,7 +14,7 @@ end
 
 Thrown on an internal executor error.
 """
-struct ExecutorInternalError <: Exception  # aka TuberculosisError
+struct ExecutorInternalError <: Exception
     msg :: AbstractString
     ex  :: Union{Nothing, CapturedException}
 
@@ -29,22 +29,6 @@ function Base.showerror(io::IO, ex::ExecutorInternalError)
         showerror(io, ex.ex.ex, ex.ex.processed_bt)
     end
 end
-
-
-# mutable struct Metrics
-#     const lock :: ReentrantLock
-#     submitted  :: Int
-#     started    :: Int
-#     completed  :: Int
-#     failed     :: Int
-#     canceled   :: Int
-#     stoped     :: Int
-#     rejected   :: Int
-#     active     :: Int
-#     queued     :: Int
-
-#     Metrics() = new(ReentrantLock(), 0, 0, 0, 0, 0, 0, 0, 0)
-# end
 
 
 """
@@ -70,7 +54,6 @@ mutable struct Executor
     const sem            :: Base.Semaphore
     const queue          :: Channel{Job}
     const errors         :: Vector{ExecutorInternalError}
-    # const metrics        :: Metrics
     @atomic state        :: ExecutorStates.State
     dispatcher           :: Union{Nothing, Task}
 end
@@ -106,36 +89,12 @@ function Executor(;
         Semaphore(concurrently),
         Channel{Job}(queue_capacity),
         ExecutorInternalError[],
-        # Metrics(),
         ExecutorStates.Open,
         nothing,  # dispatcher
     )
     dispatch!(executor)
     return executor
 end
-
-
-# """
-#     metrics(executor::Executor)::NamedTuple
-
-# Returns a consistent snapshot of executor metrics.
-# """
-# function metrics(executor::Executor)::NamedTuple
-#     m = executor.metrics
-#     lock(m.lock) do 
-#         (;
-#             m.submitted,
-#             m.started,
-#             m.completed,
-#             m.failed,
-#             m.canceled,
-#             m.rejected,
-#             m.active,
-#             m.queued,
-#         )
-#     end
-# end
-
 
 """
     isopen(executor::Executor)::Bool
@@ -236,10 +195,6 @@ function throw_error(executor::Executor)
 end
 
 
-#Future
-#terminate!(::Executor)
-
-#Future
 function with_executor(
     @nospecialize(f),
     ;
