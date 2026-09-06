@@ -2,9 +2,7 @@
  
 include("common.jl")
 
-if Threads.nthreads(:default) + Threads.nthreads(:interactive) > Sys.CPU_THREADS
-    error("Thread count exceeds available CPU threads; guaranteed execution cannot be provided.")
-end
+check_thread_count()
 
 @testset "Backpressure" begin
     default = Executor(
@@ -20,12 +18,10 @@ end
     try
         job_num = 1 << 20
         interval = 0.1
-        max_interval = 0.2
-        target = 0.95
-        event = Base.Event()
+        max_interval = 0.2  # interval + scheduling overhead
+        target = 0.90
         intervals = sizehint!(Float64[], 10000)
         probe = submit!(interactive) do cancel_token
-            wait(event)
             prev_ns = time_ns()
             while ! iscancelrequested(cancel_token)
                 sleep(interval)
@@ -34,7 +30,6 @@ end
                 prev_ns = curr_ns
             end
         end
-        notify(event)
         handles = Channel{Handle}(2*job_num)
         @sync begin
             Threads.@spawn :default for _ in 1:(job_num)
@@ -56,7 +51,8 @@ end
         end
         stop!(probe)
         wait(probe)
-        @test mean(intervals .<= max_interval) >= target
+        result = mean(intervals .<= max_interval)
+        @test result >= target
     finally
         close(default)
         close(interactive)

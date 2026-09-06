@@ -13,8 +13,8 @@ using ..StateMachines
     Failed
 end
 const STATE_MACHINE = StateMachine(
-    Queued     => [Pending, Canceled],
-    Pending    => [Running, Canceled],
+    Queued     => [Pending, Canceled, Failed],
+    Pending    => [Running, Canceled, Failed],
     Canceled   => [],
     Running    => [Completed, Stopping, Failed],
     Completed  => [],
@@ -53,7 +53,7 @@ mutable struct Handle
     const __dbg        :: Bool
     const dbg_trace    :: Vector{JobEvent}
     result             :: Union{Nothing, Any}  # not baboon code - it's for illustration :)
-    error              :: Union{Nothing, Exception}
+    error              :: Union{Nothing, Exception}  # CapturedException <: Exception
     @atomic state     :: HandleStates.State
 end
 
@@ -177,16 +177,15 @@ isfinal(handle::Handle)::Bool =
     HandleStates.is_terminal(@atomic(handle.state))
 
 
-function set_state_locked!(handle::Handle, state::HandleStates.State; force::Bool=false)
-    force || HandleStates.check_transit(@atomic(handle.state), state)
+function transit_locked!(handle::Handle, state::HandleStates.State)
+    HandleStates.check_transit(@atomic(handle.state), state)
     @atomic handle.state = state
-    trace_locked!(handle)
+    handle.__dbg && trace_locked!(handle)
     notify(handle.cond; all=true, error=false)
     return handle
 end
 
 function trace_locked!(handle::Handle)
-    handle.__dbg || return handle
     push!(handle.dbg_trace, JobEvent(
         handle.job_uuid,
         next_job_trace_global_sequence(),
@@ -199,30 +198,25 @@ function trace_locked!(handle::Handle)
     return handle
 end
 
-function set_state!(handle::Handle, state::HandleStates.State; force::Bool=false)
+function set_state!(handle::Handle, state::HandleStates.State)
     lock(handle.lock) do 
-        set_state_locked!(handle, state; force)
+        transit_locked!(handle, state)
     end
     return handle
 end
 
-function set_failed!(handle::Handle, ex, bt::Vector=[]; force::Bool=false)
+function set_failed!(handle::Handle, ex, bt::Vector=[])
     lock(handle.lock) do
         handle.error = CapturedException(ex, bt)
-        set_state_locked!(handle, HandleStates.Failed; force)
+        transit_locked!(handle, HandleStates.Failed)
     end
-    return handle
-end
-
-function set_error_force!(handle::Handle, ex, bt::Vector=[])
-    set_failed!(handle, ex, bt; force=true)
     return handle
 end
 
 function try_pending!(handle::Handle)::Bool
     lock(handle.lock) do
         iscanceled(handle) && return false
-        set_state_locked!(handle, HandleStates.Pending)
+        transit_locked!(handle, HandleStates.Pending)
         return true
     end
 end
@@ -230,7 +224,7 @@ end
 function try_running!(handle::Handle)::Bool
     lock(handle.lock) do
         iscanceled(handle) && return false
-        set_state_locked!(handle, HandleStates.Running)
+        transit_locked!(handle, HandleStates.Running)
         return true
     end
 end
@@ -252,22 +246,20 @@ function async_execute!(@nospecialize(f), handle::Handle, sem::Semaphore, pool::
             lock(handle.lock) do
                 if isrunning(handle)
                     handle.result = result
-                    set_state_locked!(handle, HandleStates.Completed)
+                    transit_locked!(handle, HandleStates.Completed)
                 elseif isstopping(handle)
                     handle.result = result
-                    set_state_locked!(handle, HandleStates.Stopped)
+                    transit_locked!(handle, HandleStates.Stopped)
                 elseif isfailed(handle)
                     # skip failed
                 else
-                    set_error_force!(handle, ExecutorInternalError(
+                    set_failed!(handle, ExecutorInternalError(
                         "Wrong handle state: `$(@atomic(handle.state))`",
                     ))
                 end
             end
         catch ex
-            set_error_force!(handle, ExecutorInternalError(
-                "Unknown error", ex, catch_backtrace()
-            ))
+            set_failed!(handle, ExecutorInternalError("Unknown error", ex, catch_backtrace()))
         finally
             release(sem)
         end
@@ -311,22 +303,22 @@ function stop_locked!(handle::Handle)
     state = isrunning(handle) ?
         HandleStates.Stopping :
         HandleStates.Canceled
-    set_state_locked!(handle, state)
+    transit_locked!(handle, state)
     return handle
 end
 
 
 """
-    JobCancelledError(msg::AbstractString)
+    ExecutorJobCancelledError(msg::AbstractString)
 
 Thrown on fetch result from cancelling or cancelled job.
 """
-struct JobCancelledError <: Exception
+struct ExecutorJobCancelledError <: Exception
     msg :: AbstractString
 end
 
-function Base.showerror(io::IO, e::JobCancelledError)
-    print(io, "JobCancelledError: ", e.msg)
+function Base.showerror(io::IO, e::ExecutorJobCancelledError)
+    print(io, "ExecutorJobCancelledError: ", e.msg)
 end
 
 
@@ -360,7 +352,7 @@ function Base.fetch(handle::Handle)
     lock(handle.lock) do 
         wait_locked!(handle; throw=true)
         (iscompleted(handle) || isstopped(handle))&& return handle.result
-        iscanceled(handle) && throw(JobCancelledError(
+        iscanceled(handle) && throw(ExecutorJobCancelledError(
             "Job was cancelled",
         ))
         throw(ExecutorInternalError(

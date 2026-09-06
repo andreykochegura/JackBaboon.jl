@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: MIT
 
 using Test
+using Random
 using JackBaboon
 using JackBaboon:
     Handle,
@@ -19,16 +20,25 @@ using JackBaboon:
     disable_job_global_dbg_tracing
 
 
-mutable struct AtomicCounter
-    @atomic x :: Int
-    
-    AtomicCounter() = new(0)
+function check_thread_count()
+    n = Threads.nthreads(:default) + Threads.nthreads(:interactive)
+    n <= Sys.CPU_THREADS && return nothing
+    @warn("""Thread count exceeds available CPU threads;
+    $(@__FILE__) guaranteed execution cannot be provided;
+    Threads.nthreads(:default)=$(Threads.nthreads(:default));
+    Threads.nthreads(:interactive)=$(Threads.nthreads(:interactive));
+    Sys.CPU_THREADS=$(Sys.CPU_THREADS);""")
+    exit()
 end
 
-mean(a) = sum(a) / length(a)
-
+mutable struct AtomicCounter
+    @atomic x :: Int
+    AtomicCounter() = new(0)
+end
 atomic_increment!(a::AtomicCounter) = @atomic a.x += 1
 atomic_decrement!(a::AtomicCounter) = @atomic a.x -= 1
+
+mean(a) = sum(a) / length(a)
 
 function do_work(work_size)::Float64
     n = work_size

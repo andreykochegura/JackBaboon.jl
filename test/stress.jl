@@ -2,6 +2,8 @@
 
 include("common.jl")
 
+check_thread_count()
+
 @testset "Mini Stress" begin
     job_num = 1 << 20
     e = Executor(

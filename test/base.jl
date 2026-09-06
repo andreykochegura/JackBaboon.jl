@@ -2,6 +2,8 @@
 
 include("common.jl")
 
+check_thread_count()
+
 enable_job_global_dbg_tracing()
 
 @testset "Smoke" begin
@@ -22,7 +24,7 @@ enable_job_global_dbg_tracing()
 end
 
 @testset "Arguments validation" begin
-    @test_throws ArgumentError Executor(; pool = :qwerty)
+    @test_throws ArgumentError Executor(; pool = :foo)
     @test_throws ArgumentError Executor(; queue_capacity = 0)
     @test_throws ArgumentError Executor(; queue_capacity = -1)
     @test_throws ArgumentError Executor(; concurrently = 0)
@@ -33,7 +35,7 @@ end
     close(e)
 end
 
-@testset "Cancellation" begin
+@testset "Stopping" begin
     with_executor() do e
         @test !iscancelrequested(CancelToken())
         event = Base.Event(true)
@@ -51,9 +53,9 @@ end
         @test isstopped(transit)
         stop!(transit)
         @test isstopped(transit)
-        @test fetch(transit) == true  # cancel token is requested
+        @test fetch(transit)  # cancel token is requested
         stop!(transit)
-        @test fetch(transit) == true
+        @test fetch(transit)
         check_trace(transit)
     end
 end
@@ -216,4 +218,15 @@ end
         @test_throws ExecutorClosedError submit!(e) do c; end
         @test_throws ExecutorClosedError execute!(e) do c;end
     end
+end
+
+@testset "Printing" begin
+    s = sprint(showerror, ExecutorInternalError("foo"))
+    @test all(occursin.(("ExecutorInternalError", "foo"), s))
+    s = sprint(showerror, ExecutorInternalError("foo", ErrorException("bar"), []))
+    @test all(occursin.(("ExecutorInternalError", "foo", "Caused by:", "bar"), s))
+    s = sprint(show, MIME"text/plain"(), Executor())
+    @test all(occursin.(("Executor", "#=Open=#", "pool=", "queue_capacity=", "concurrently="), s))
+    s = sprint(show, MIME"text/plain"(), JackBaboon.Handle())
+    @test all(occursin.(("JackBaboon.Handle", "#=Queued [", "]=#)"), s))
 end

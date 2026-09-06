@@ -24,11 +24,27 @@ end
 
 function Base.showerror(io::IO, ex::ExecutorInternalError)
     print(io, "ExecutorInternalError: ", ex.msg)
-    ex.ex === nothing && return
-    print(io, "\nCaused by: ")
-    showerror(io, ex.ex.ex, ex.ex.processed_bt)
+    if ex.ex !== nothing
+        print(io, "\nCaused by: ")
+        showerror(io, ex.ex.ex, ex.ex.processed_bt)
+    end
 end
 
+
+mutable struct Metrics
+    const lock :: ReentrantLock
+    submitted  :: Int
+    started    :: Int
+    completed  :: Int
+    failed     :: Int
+    canceled   :: Int
+    stoped     :: Int
+    rejected   :: Int
+    active     :: Int
+    queued     :: Int
+
+    Metrics() = new(ReentrantLock(), 0, 0, 0, 0, 0, 0, 0, 0)
+end
 
 
 """
@@ -47,15 +63,16 @@ Create and run executor with limited concurrency.
 - `concurrently`: maximum number of jobs executing concurrently.
 """
 mutable struct Executor
-    const   lock           :: ReentrantLock
-    const   pool           :: Symbol
-    const   queue_capacity :: Int
-    const   concurrently   :: Int
-    const   sem            :: Base.Semaphore
-    const   queue          :: Channel{Job}
-    const   errors         :: Vector{ExecutorInternalError}
-    @atomic state          :: ExecutorStates.State
-    dispatcher             :: Union{Nothing, Task}
+    const lock           :: ReentrantLock
+    const pool           :: Symbol
+    const queue_capacity :: Int
+    const concurrently   :: Int
+    const sem            :: Base.Semaphore
+    const queue          :: Channel{Job}
+    const errors         :: Vector{ExecutorInternalError}
+    # const metrics        :: Metrics
+    @atomic state        :: ExecutorStates.State
+    dispatcher           :: Union{Nothing, Task}
 end
 
 function Base.show(io::IO, ::MIME"text/plain", e::Executor)
@@ -89,11 +106,34 @@ function Executor(;
         Semaphore(concurrently),
         Channel{Job}(queue_capacity),
         ExecutorInternalError[],
+        # Metrics(),
         ExecutorStates.Open,
         nothing,  # dispatcher
     )
     dispatch!(executor)
     return executor
+end
+
+
+"""
+    metrics(executor::Executor)::NamedTuple
+
+Returns a consistent snapshot of executor metrics.
+"""
+function metrics(executor::Executor)::NamedTuple
+    m = executor.metrics
+    lock(m.lock) do 
+        (;
+            m.submitted,
+            m.started,
+            m.completed,
+            m.failed,
+            m.canceled,
+            m.rejected,
+            m.active,
+            m.queued,
+        )
+    end
 end
 
 
@@ -136,10 +176,8 @@ function dispatch!(executor::Executor)
                     acquire(executor.sem)
                     async_execute!(job.f, job.handle, executor.sem, executor.pool)  # release(sem) here
                 catch dispatch_ex
-                    try_cleanup!(executor, job, dispatch_ex)
-                    throw(ExecutorInternalError(
-                        "Executor dispatch error; see `executor.errors`",
-                    ))
+                    err = try_cleanup!(executor, job, dispatch_ex)
+                    throw(err)
                 end
             end
         end
@@ -152,15 +190,17 @@ function try_cleanup!(executor::Executor, job, dispatch_ex)
         try
             close(executor.queue)
             @atomic executor.state = ExecutorStates.Failed
-            dispatch_err = ExecutorInternalError("Executor dispatch error", dispatch_ex, catch_backtrace())
+            dispatch_err = ExecutorInternalError("Executor dispatcher error", dispatch_ex, catch_backtrace())
             push!(executor.errors, dispatch_err)
-            set_error_force!(job.handle, dispatch_err)
+            set_failed!(job.handle, dispatch_err)
             for job in executor.queue
-                set_error_force!(job.handle, dispatch_err)
+                set_failed!(job.handle, dispatch_err)
             end
+            return dispatch_err
         catch cleanup_ex
             cleanup_err = ExecutorInternalError("Executor cleanup error", cleanup_ex, catch_backtrace())
             push!(executor.errors, cleanup_err)
+            return cleanup_err
         end
     end 
 end
@@ -218,7 +258,7 @@ end
 
 
 """
-    execute!(@nospecialize(f), executor::Executor)
+    execute!(f, executor::Executor)
 
 Synchronous concurrently execution.
 
@@ -274,7 +314,7 @@ end
 
 
 """
-    submit!(@nospecialize(f), executor::Executor)::Handle
+    submit!(f, executor::Executor)::Handle
 
 Asynchronous concurrently execution.
 

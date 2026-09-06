@@ -2,6 +2,8 @@
 
 include("common.jl")
 
+check_thread_count()
+
 enable_job_global_dbg_tracing()
 
 @testset "Executor dispatcher crash" begin
@@ -23,7 +25,7 @@ enable_job_global_dbg_tracing()
         @test_throws ExecutorInternalError execute!(e) do c; end
         @test_throws ExecutorInternalError close(e)
     end
-    JackBaboon.set_error_force!(
+    JackBaboon.set_failed!(
         :: JackBaboon.Handle,
         :: Any,
         :: Vector,
@@ -32,7 +34,7 @@ enable_job_global_dbg_tracing()
         h = submit!(e) do c; end
         wait(e.dispatcher; throw=false)
         @test istaskfailed(e.dispatcher)
-        @test ispending(h)  # because set_error_force! is failed
+        @test ispending(h)  # because set_failed! is failed
         @test_throws CompositeException submit!(e) do c; end
         @test_throws CompositeException close(e)
     end

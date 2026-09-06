@@ -32,7 +32,7 @@ export
     ExecutorInternalError,
     ExecutorClosedError,
     ExecutorRejectedError,
-    JobCancelledError
+    ExecutorJobCancelledError
 
 
 include("cancel_token.jl")

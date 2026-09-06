@@ -2,6 +2,8 @@
 
 include("common.jl")
 
+check_thread_count()
+
 enable_job_global_dbg_tracing()
 
 @testset "Queued → Pending → Running → Completed" begin

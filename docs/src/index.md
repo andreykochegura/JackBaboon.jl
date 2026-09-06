@@ -1,7 +1,5 @@
 # JackBaboon
 
-Julia executor with limited concurrency.
-
 ## API
 
 ```@docs
@@ -27,6 +25,6 @@ Julia executor with limited concurrency.
     Base.fetch(::JackBaboon.Handle)
     ExecutorClosedError
     ExecutorRejectedError
-    JobCancelledError
+    ExecutorJobCancelledError
     ExecutorInternalError
 ```

@@ -115,19 +115,20 @@ Each accepted job follows a lifecycle represented by a state machine diagram.
     [*] --> Queued: submit!() or execute!()
     Queued --> Pending: taken from queue
     Queued --> Canceled: stop!()
-    Pending --> Running: placed into execution slot
+    Queued --> Failed: executor error
+    Pending --> Running: semaphore acquired
     Pending --> Canceled: stop!()
+    Pending --> Failed: executor error
     Running --> Stopping: stop!()
-    Running --> Failed: job error or executor failure
+    Running --> Failed: job error
     Running --> Completed: job completed
     Stopping --> Stopped: job completed
-    Stopping --> Failed: job error or executor failure
+    Stopping --> Failed: job error
     Stopped --> [*]
     Canceled --> [*]
     Completed --> [*]
     Failed --> [*]
 ```
-
 
 ## Planned
 
