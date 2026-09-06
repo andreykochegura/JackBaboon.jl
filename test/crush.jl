@@ -25,19 +25,6 @@ enable_job_global_dbg_tracing()
         @test_throws ExecutorInternalError execute!(e) do c; end
         @test_throws ExecutorInternalError close(e)
     end
-    JackBaboon.set_failed!(
-        :: JackBaboon.Handle,
-        :: Any,
-        :: Vector,
-    ) = error("monkey attack on dispatcher cleanup")
-    let e = Executor()
-        h = submit!(e) do c; end
-        wait(e.dispatcher; throw=false)
-        @test istaskfailed(e.dispatcher)
-        @test ispending(h)  # because set_failed! is failed
-        @test_throws CompositeException submit!(e) do c; end
-        @test_throws CompositeException close(e)
-    end
 end
 
 disable_job_global_dbg_tracing()

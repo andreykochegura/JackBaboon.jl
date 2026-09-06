@@ -53,9 +53,9 @@ mutable struct Executor
     const concurrently   :: Int
     const sem            :: Base.Semaphore
     const queue          :: Channel{Job}
-    const errors         :: Vector{ExecutorInternalError}
-    @atomic state        :: ExecutorStates.State
+    error                :: Union{Nothing, Exception}
     dispatcher           :: Union{Nothing, Task}
+    @atomic state        :: ExecutorStates.State
 end
 
 function Base.show(io::IO, ::MIME"text/plain", e::Executor)
@@ -88,9 +88,9 @@ function Executor(;
         concurrently,
         Semaphore(concurrently),
         Channel{Job}(queue_capacity),
-        ExecutorInternalError[],
-        ExecutorStates.Open,
+        nothing,
         nothing,  # dispatcher
+        ExecutorStates.Open,
     )
     dispatch!(executor)
     return executor
@@ -134,34 +134,23 @@ function dispatch!(executor::Executor)
                     try_pending!(job.handle) || continue  # skip canceled 
                     acquire(executor.sem)
                     async_execute!(job.f, job.handle, executor.sem, executor.pool)  # release(sem) here
-                catch dispatch_ex
-                    err = try_cleanup!(executor, job, dispatch_ex)
-                    throw(err)
+                catch ex
+                    err = ExecutorInternalError("Executor dispatcher error", ex, catch_backtrace())
+                    lock(executor.lock) do
+                        close(executor.queue)
+                        @atomic executor.state = ExecutorStates.Failed
+                        executor.error = err
+                    end
+                    set_failed!(job.handle, err)
+                    for job in executor.queue
+                        set_failed!(job.handle, err)
+                    end
+                    rethrow()
                 end
             end
         end
     end
     return executor
-end
-# in catch block
-function try_cleanup!(executor::Executor, job, dispatch_ex)
-    lock(executor.lock) do
-        try
-            close(executor.queue)
-            @atomic executor.state = ExecutorStates.Failed
-            dispatch_err = ExecutorInternalError("Executor dispatcher error", dispatch_ex, catch_backtrace())
-            push!(executor.errors, dispatch_err)
-            set_failed!(job.handle, dispatch_err)
-            for job in executor.queue
-                set_failed!(job.handle, dispatch_err)
-            end
-            return dispatch_err
-        catch cleanup_ex
-            cleanup_err = ExecutorInternalError("Executor cleanup error", cleanup_ex, catch_backtrace())
-            push!(executor.errors, cleanup_err)
-            return cleanup_err
-        end
-    end 
 end
 
 
@@ -178,7 +167,7 @@ function Base.close(executor::Executor)
             close(executor.queue)
             @atomic executor.state = ExecutorStates.Closed
         elseif iscrashed(executor)
-            throw_error(executor)
+            throw(executor.error)
         else
             throw(ExecutorInternalError(
                 "Wrong executor state: `$(@atomic(executor.state))`",
@@ -186,12 +175,6 @@ function Base.close(executor::Executor)
         end
     end
     return executor
-end
-
-function throw_error(executor::Executor)
-    length(executor.errors) == 1 ?
-        throw(only(executor.errors)) :
-        throw(CompositeException(executor.errors))
 end
 
 
@@ -300,7 +283,7 @@ function submit!(@nospecialize(f), executor::Executor)::Handle
         isclosed(executor) && throw(ExecutorClosedError(
             "Executor is closed",
             ))
-        iscrashed(executor) && throw_error(executor)
+        iscrashed(executor) && throw(executor.error)
         istaskfailed(executor.dispatcher) && throw(ExecutorInternalError(
             "Executor dispatcher unexpected crash; see `executor.dispatcher`", 
         ))
