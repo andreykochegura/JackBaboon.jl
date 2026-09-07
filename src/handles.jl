@@ -97,7 +97,7 @@ end
 """
     isqueued(handle::Handle)::Bool
 
-Returns `true` if job in executor queue.
+Returns `true` if the job is in the executor queue.
 """
 isqueued(handle::Handle)::Bool =
     HandleStates.Queued == @atomic handle.state
@@ -106,7 +106,7 @@ isqueued(handle::Handle)::Bool =
 """
     ispending(handle::Handle)::Bool
 
-Returns `true` if job is pending execution.
+Returns `true` if the job is pending execution.
 """
 ispending(handle::Handle)::Bool =
     HandleStates.Pending == @atomic handle.state
@@ -115,7 +115,7 @@ ispending(handle::Handle)::Bool =
 """
     isrunning(handle::Handle)::Bool
 
-Returns `true` if job task is executing.
+Returns `true` if the job is executing.
 """
 isrunning(handle::Handle)::Bool =
     HandleStates.Running == @atomic handle.state
@@ -124,7 +124,7 @@ isrunning(handle::Handle)::Bool =
 """
     iscompleted(handle::Handle)::Bool
 
-Returns `true` if job task completed successfully.
+Returns `true` if the job completed successfully.
 """
 iscompleted(handle::Handle)::Bool =
     HandleStates.Completed == @atomic handle.state
@@ -133,7 +133,7 @@ iscompleted(handle::Handle)::Bool =
 """
     isfailed(handle::Handle)::Bool
 
-Returns `true` if job task is failed.
+Returns `true` if the job has failed.
 """
 isfailed(handle::Handle)::Bool =
     HandleStates.Failed == @atomic handle.state
@@ -142,7 +142,7 @@ isfailed(handle::Handle)::Bool =
 """
     isstopping(handle::Handle)::Bool
 
-Returns `true` if running job stopping in progress.
+Returns `true` if the running job is stopping.
 """
 isstopping(handle::Handle)::Bool =
     HandleStates.Stopping == @atomic handle.state
@@ -151,7 +151,7 @@ isstopping(handle::Handle)::Bool =
 """
     isstopped(handle::Handle)::Bool
 
-Returns `true` if job is stopped.
+Returns `true` if the job is stopped.
 """
 isstopped(handle::Handle)::Bool =
     HandleStates.Stopped == @atomic handle.state
@@ -160,7 +160,7 @@ isstopped(handle::Handle)::Bool =
 """
     iscanceled(handle::Handle)::Bool
 
-Returns `true` if job was canceled and task is completed.
+Returns `true` if the job was stopped before it was started.
 """
 iscanceled(handle::Handle)::Bool =
     HandleStates.Canceled == @atomic handle.state
@@ -169,7 +169,7 @@ iscanceled(handle::Handle)::Bool =
 """
     isfinal(handle::Handle)::Bool
 
-Returns `true` if job in final state.
+Returns `true` if the job is in a final state.
 """
 isfinal(handle::Handle)::Bool =
     HandleStates.is_terminal(@atomic(handle.state))
@@ -204,6 +204,15 @@ function set_failed!(handle::Handle, ex, bt::Vector=[])
     return handle
 end
 
+function try_failed!(handle::Handle, ex, bt::Vector=[])
+    lock(handle.lock) do 
+        iscanceled(handle) && return false
+        handle.error = CapturedException(ex, bt)
+        transit_locked!(handle, HandleStates.Failed)
+        return true
+    end
+end
+
 function try_pending!(handle::Handle)::Bool
     lock(handle.lock) do
         iscanceled(handle) && return false
@@ -224,7 +233,11 @@ function async_execute!(@nospecialize(f), handle::Handle, sem::Semaphore, pool::
     Threads.@spawn pool begin
         try
             result = try
-                Base.invokelatest(f, handle.cancel_token)  # NOTE: minimal overhead for already compiled functions
+                # Base.invokelatest() add ~50 ns to the execution
+                # time for already-compiled function, this is not
+                # an overhead for the Executor, but it cannot be
+                # explained to a stupid LLM.
+                Base.invokelatest(f, handle.cancel_token)
             catch ex
                 set_failed!(handle, ex, catch_backtrace())
                 nothing

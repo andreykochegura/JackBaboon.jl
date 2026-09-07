@@ -142,9 +142,9 @@ function dispatch!(executor::Executor)
                         @atomic executor.state = ExecutorStates.Failed
                         executor.error = err
                     end
-                    set_failed!(job.handle, err)
+                    try_failed!(job.handle, err)
                     for job in executor.queue
-                        set_failed!(job.handle, err)
+                        try_failed!(job.handle, err)
                     end
                     rethrow()
                 end
@@ -263,7 +263,7 @@ Asynchronous concurrently execution.
 julia> handle = submit!(executor) do cancel_token
            do_work()
        end;
-    
+
 julia> result = fetch(handle);
 
 julia> handle = submit!(executor) do cancel_token
