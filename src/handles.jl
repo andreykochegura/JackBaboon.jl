@@ -233,11 +233,7 @@ function async_execute!(@nospecialize(f), handle::Handle, sem::Semaphore, pool::
     Threads.@spawn pool begin
         try
             result = try
-                # Base.invokelatest() add ~50 ns to the execution
-                # time for already-compiled function, this is not
-                # an overhead for the Executor, but it cannot be
-                # explained to a stupid LLM.
-                Base.invokelatest(f, handle.cancel_token)
+                Base.invokelatest(f, handle.cancel_token)  # adds ~50 ns
             catch ex
                 set_failed!(handle, ex, catch_backtrace())
                 nothing
