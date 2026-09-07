@@ -19,7 +19,7 @@ enable_job_global_dbg_tracing()
         @test istaskfailed(e.dispatcher)
         wait(h; throw=false)
         @test isfailed(h)
-        @test h.dbg_trace[end-1].state == HandleStates.Pending
+        @test h.dbg_trace[end-1].state == HandleStates.Running
         @test_throws CapturedException fetch(h)
         @test_throws ExecutorInternalError submit!(e) do c; end
         @test_throws ExecutorInternalError execute!(e) do c; end

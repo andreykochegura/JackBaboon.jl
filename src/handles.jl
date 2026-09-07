@@ -187,7 +187,7 @@ function trace_locked!(handle::Handle)
     push!(handle.dbg_trace, JobEvent(
         handle.job_uuid,
         next_job_trace_global_sequence(),
-        time_ns(),   # NOTE: not global ordering primitive and reset every few years
+        time_ns(),   # NOTE: process-local monotonic clock and reset every few years
         iscancelrequested(handle.cancel_token),
         handle.result,
         handle.error,
@@ -220,11 +220,7 @@ function try_running!(handle::Handle)::Bool
     end
 end
 
-function async_execute!(@nospecialize(f), handle::Handle, sem::Semaphore, pool::Symbol)::Nothing
-    if ! try_running!(handle)
-        release(sem)
-        return nothing  # skip canceled
-    end
+function async_execute!(@nospecialize(f), handle::Handle, sem::Semaphore, pool::Symbol)::Task
     Threads.@spawn pool begin
         try
             result = try
@@ -254,7 +250,6 @@ function async_execute!(@nospecialize(f), handle::Handle, sem::Semaphore, pool::
             release(sem)
         end
     end
-    return nothing
 end
 
 

@@ -133,6 +133,7 @@ function dispatch!(executor::Executor)
                 try
                     try_pending!(job.handle) || continue  # skip canceled 
                     acquire(executor.sem)
+                    try_running!(job.handle) || (release(executor.sem); continue)  # skip canceled
                     async_execute!(job.f, job.handle, executor.sem, executor.pool)  # release(sem) here
                 catch ex
                     err = ExecutorInternalError("Executor dispatcher error", ex, catch_backtrace())
