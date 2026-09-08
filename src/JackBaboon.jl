@@ -22,6 +22,7 @@ export
     isstopped,
     iscanceled,
     isfinal,
+    metrics,
     ExecutorInternalError,
     ExecutorClosedError,
     ExecutorRejectedError,
@@ -30,6 +31,7 @@ export
 
 include("cancel_token.jl")
 include("state_machines.jl")
+include("metrics.jl")
 include("tracing.jl")
 include("handles.jl")
 include("jobs.jl")

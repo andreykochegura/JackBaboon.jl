@@ -229,34 +229,38 @@ function try_running!(handle::Handle)::Bool
     end
 end
 
-function async_execute!(@nospecialize(f), handle::Handle, sem::Semaphore, pool::Symbol)::Task
+function async_execute!(@nospecialize(f), handle::Handle, sem::Semaphore, pool::Symbol, metrics::Metrics)::Task
     Threads.@spawn pool begin
         try
             result = try
                 Base.invokelatest(f, handle.cancel_token)  # adds ~50 ns
             catch ex
                 set_failed!(handle, ex, catch_backtrace())
+                @atomic metrics.failed += 1
                 nothing
             end
             lock(handle.lock) do
                 if isrunning(handle)
                     handle.result = result
                     transit_locked!(handle, HandleStates.Completed)
+                    @atomic metrics.completed += 1
                 elseif isstopping(handle)
                     handle.result = result
                     transit_locked!(handle, HandleStates.Stopped)
+                    @atomic metrics.stopped += 1
                 elseif isfailed(handle)
                     # skip failed
                 else
                     set_failed!(handle, ExecutorInternalError(
-                        "Wrong handle state: `$(@atomic(handle.state))`",
+                        "Unexpected behavior: wrong handle state: `$(@atomic(handle.state))`",
                     ))
                 end
             end
         catch ex
-            set_failed!(handle, ExecutorInternalError("Unknown error", ex, catch_backtrace()))
+            set_failed!(handle, ExecutorInternalError("Unexpected behavior: unknown error", ex, catch_backtrace()))
         finally
             release(sem)
+            @atomic metrics.active -= 1
         end
     end
 end

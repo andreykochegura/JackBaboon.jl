@@ -2,7 +2,7 @@
  
 include("common.jl")
 
-check_thread_count()
+check_thread_count(exit_process=true)
 
 @testset "Backpressure" begin
     default = Executor(
@@ -35,13 +35,13 @@ check_thread_count()
             Threads.@spawn :default for _ in 1:(job_num)
                 put!(handles, submit!(interactive) do c
                     for _ in 1:5
-                        do_work(1); yield()
+                        do_work(10); yield()
                     end
                 end)
             end
             Threads.@spawn :default for _ in 1:(job_num)
                 put!(handles, submit!(default) do c
-                    do_work(50)
+                    do_work(100)
                 end)
             end
         end

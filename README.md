@@ -132,7 +132,6 @@ Each accepted job follows a lifecycle represented by a state machine diagram.
 
 ## Planned
 
-- Metrics.
 - Priorities.
 - Pause and resume.
 - Diagnostic warnings.

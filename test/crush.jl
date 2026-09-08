@@ -2,16 +2,17 @@
 
 include("common.jl")
 
-check_thread_count()
+check_thread_count(exit_process=true)
 
 enable_job_global_dbg_tracing()
 
 @testset "Executor dispatcher crash" begin
     JackBaboon.async_execute!(
         @nospecialize(f),
-        handle :: JackBaboon.Handle,
-        sem    :: Base.Semaphore,
-        pool   :: Symbol,
+        handle  :: JackBaboon.Handle,
+        sem     :: Base.Semaphore,
+        pool    :: Symbol,
+        metrics :: JackBaboon.Metrics,
     ) = (sleep(0.1); error("monkey attack on dispatcher level"))
     let e = Executor()
         h = submit!(e) do c; end

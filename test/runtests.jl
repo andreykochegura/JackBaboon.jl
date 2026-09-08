@@ -12,6 +12,7 @@ end
 run_test_process("state_machine.jl", threads="2,2")
 run_test_process("base.jl", threads="2,2")
 run_test_process("transitions.jl", threads="2,2")
+run_test_process("metrics.jl", threads="2,2")
 run_test_process("crush.jl", threads="2,2")
 run_test_process("stress.jl", threads="2,2")
 run_test_process("functional.jl", threads="4,4")

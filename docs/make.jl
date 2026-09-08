@@ -11,7 +11,7 @@ makedocs(
     format = Documenter.HTML(),
 )
 
-if get(ENV, "JACKBABOON_DOCS_DEPLOY", "local") == "true"
+if get(ENV, "JACKBABOON_DOCS_DEPLOY", "false") == "true"
     deploydocs(
         repo = "github.com/andreykochegura/JackBaboon.jl.git"
     )

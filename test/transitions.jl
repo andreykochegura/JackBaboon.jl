@@ -2,7 +2,7 @@
 
 include("common.jl")
 
-check_thread_count()
+check_thread_count(exit_process=true)
 
 enable_job_global_dbg_tracing()
 

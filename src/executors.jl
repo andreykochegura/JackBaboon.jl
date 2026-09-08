@@ -53,6 +53,7 @@ mutable struct Executor
     const concurrently   :: Int
     const sem            :: Base.Semaphore
     const queue          :: Channel{Job}
+    const metrics        :: Metrics
     error                :: Union{Nothing, Exception}
     dispatcher           :: Union{Nothing, Task}
     @atomic state        :: ExecutorStates.State
@@ -88,6 +89,7 @@ function Executor(;
         concurrently,
         Semaphore(concurrently),
         Channel{Job}(queue_capacity),
+        Metrics(),
         nothing,
         nothing,  # dispatcher
         ExecutorStates.Open,
@@ -95,6 +97,16 @@ function Executor(;
     dispatch!(executor)
     return executor
 end
+
+
+"""
+    metrics(executor::Executor)::NamedTuple
+
+Returns a metrics snapshot; metrics are eventually consistent.
+"""
+metrics(e::Executor)::NamedTuple =
+    snapshot(e.metrics; e.concurrently, e.queue_capacity)
+
 
 """
     isopen(executor::Executor)::Bool
@@ -131,10 +143,20 @@ function dispatch!(executor::Executor)
         executor.dispatcher = Threads.@spawn executor.pool begin
             for job in executor.queue 
                 try
-                    try_pending!(job.handle) || continue  # skip canceled 
+                    @atomic executor.metrics.backlog -= 1
+                    if ! try_pending!(job.handle)
+                        @atomic executor.metrics.cancelled += 1
+                        continue  # skip canceled 
+                    end
                     acquire(executor.sem)
-                    try_running!(job.handle) || (release(executor.sem); continue)  # skip canceled
-                    async_execute!(job.f, job.handle, executor.sem, executor.pool)  # release(sem) here
+                    @atomic executor.metrics.active += 1
+                    if ! try_running!(job.handle)
+                        release(executor.sem)
+                        @atomic executor.metrics.cancelled += 1
+                        continue  # skip canceled
+                    end
+                    @atomic executor.metrics.started += 1
+                    async_execute!(job.f, job.handle, executor.sem, executor.pool, executor.metrics)  # release(sem) here
                 catch ex
                     err = ExecutorInternalError("Executor dispatcher error", ex, catch_backtrace())
                     lock(executor.lock) do
@@ -288,14 +310,17 @@ function submit!(@nospecialize(f), executor::Executor)::Handle
         istaskfailed(executor.dispatcher) && throw(ExecutorInternalError(
             "Executor dispatcher unexpected crash; see `executor.dispatcher`", 
         ))
-        isfull(queue) && throw(ExecutorRejectedError(
-            "Executor queue is full",
-        ))
+        if isfull(queue)
+            @atomic executor.metrics.rejected += 1
+            throw(ExecutorRejectedError("Executor queue is full"))
+        end
         isopen(queue) || throw(ExecutorInternalError(
             "Executor queue is closed; executor state: `$(@atomic(executor.state))`",
         ))
         job = Job(f)
         put!(queue, job)
+        @atomic executor.metrics.backlog += 1
+        @atomic executor.metrics.queued += 1
         return job.handle
     end
 end

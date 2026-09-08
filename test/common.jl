@@ -20,7 +20,7 @@ using JackBaboon:
     disable_job_global_dbg_tracing
 
 
-function check_thread_count()
+function check_thread_count(;exit_process=false)
     n = Threads.nthreads(:default) + Threads.nthreads(:interactive)
     n <= Sys.CPU_THREADS && return nothing
     @warn("""Thread count exceeds available CPU threads;
@@ -28,7 +28,7 @@ function check_thread_count()
     Threads.nthreads(:default)=$(Threads.nthreads(:default));
     Threads.nthreads(:interactive)=$(Threads.nthreads(:interactive));
     Sys.CPU_THREADS=$(Sys.CPU_THREADS);""")
-    exit()
+    exit_process && exit()
 end
 
 mutable struct AtomicCounter

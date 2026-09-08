@@ -2,7 +2,7 @@
 
 include("common.jl")
 
-check_thread_count()
+check_thread_count(exit_process=true)
 
 @testset "Mini Stress" begin
     job_num = 1 << 20

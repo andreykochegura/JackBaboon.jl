@@ -21,6 +21,7 @@
     isstopped
     isfailed
     isfinal
+    metrics
     Base.wait(::JackBaboon.Handle)
     Base.fetch(::JackBaboon.Handle)
     ExecutorClosedError
