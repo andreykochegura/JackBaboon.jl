@@ -104,7 +104,7 @@ end
 """
     metrics(executor::Executor)::NamedTuple
 
-Returns a metrics snapshot. Metrics are **eventually consistent**.
+Returns a metrics snapshot; metrics are **eventually consistent**.
 
 # Metrics
 
