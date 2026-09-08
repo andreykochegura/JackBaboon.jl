@@ -17,12 +17,12 @@ Return `true` if stop has been requested for the job.
 julia> executor = Executor();
 
 julia> handle = submit!(executor) do cancel_token
-        while ! iscancelrequested(cancel_token)
-            do_work()
-            yield()
-        end
-        nothing
-    end;
+           while ! iscancelrequested(cancel_token)
+               do_work()
+               yield()
+           end
+           nothing
+       end;
 
 julia> stop!(handle);
 

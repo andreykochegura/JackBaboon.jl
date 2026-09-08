@@ -265,7 +265,7 @@ end
 """
     stop!(handle::Handle)::Handle
 
-Request a cancel; the job completion is a user responsibility.
+Request a cancel; the job completion is a user responsibility; queued stopped job remains in the queue before it is retrieved and skipped by the dispatcher.
 
 # Examples
 
