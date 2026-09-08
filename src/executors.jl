@@ -32,11 +32,11 @@ end
 
 
 """
-Executor(;
-    pool           :: Symbol  = :default,
-    queue_capacity :: Integer = 8,
-    concurrently   :: Integer = 1,
-)
+    Executor(;
+        pool           :: Symbol  = :default,
+        queue_capacity :: Integer = 8,
+        concurrently   :: Integer = 1,
+    )
 
 Create and run an executor with limited concurrency.
 
@@ -102,7 +102,7 @@ end
 
 
 """
-metrics(executor::Executor)::NamedTuple
+    metrics(executor::Executor)::NamedTuple
 
 Returns a metrics snapshot. Metrics are **eventually consistent**.
 
