@@ -42,11 +42,11 @@ Create and run an executor with limited concurrency.
 
 # Arguments
 
-|       Name       | DataType  |   Default  |                                Description                                   |
-| :--------------- | :-------- | :--------- | :--------------------------------------------------------------------------- |
-| `pool`           | `Symbol`  | `:default` | Thread pool; supported values are `:default` and `:interactive`.             |
-| `queue_capacity` | `Integer` | `8`        | Maximum number of queued jobs. New jobs are rejected when the queue is full. |
-| `concurrently`   | `Integer` | `1`        | Maximum number of jobs executing concurrently.                               |
+|       Name       | DataType  |   Default  |                                Description                                  |
+| :--------------- | :-------- | :--------- | :-------------------------------------------------------------------------- |
+| `pool`           | `Symbol`  | `:default` | Thread pool; supported values are `:default` and `:interactive`             |
+| `queue_capacity` | `Integer` | `8`        | Maximum number of queued jobs; new jobs are rejected when the queue is full |
+| `concurrently`   | `Integer` | `1`        | Maximum number of jobs executing concurrently                               |
 """
 mutable struct Executor
     const lock           :: ReentrantLock
