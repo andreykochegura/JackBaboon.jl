@@ -26,8 +26,6 @@ check_thread_count(exit_process=true)
         @test m.failed == 0
         @test m.backlog == 2
         @test m.active == 1
-        @test m.concurrently == 1
-        @test m.queue_capacity == 2
         stop!(handles[3])
         notify(event)
         wait_running(handles[4])
@@ -44,7 +42,5 @@ check_thread_count(exit_process=true)
         @test m.failed == 1
         @test m.backlog == 0
         @test m.active == 0
-        @test m.concurrently == 1
-        @test m.queue_capacity == 2
     end
 end

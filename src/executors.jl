@@ -32,19 +32,21 @@ end
 
 
 """
-    Executor(;
-        pool           :: Symbol  = :default,
-        queue_capacity :: Integer = 8,
-        concurrently   :: Integer = 1,
-    )
+Executor(;
+    pool           :: Symbol  = :default,
+    queue_capacity :: Integer = 8,
+    concurrently   :: Integer = 1,
+)
 
-Create and run executor with limited concurrency.
+Create and run an executor with limited concurrency.
 
 # Arguments
 
-- `pool`: thread pool; supported: `:default`, `:interactive`.
-- `queue_capacity`: maximum number of queued jobs; new jobs are rejected when queue is full.
-- `concurrently`: maximum number of jobs executing concurrently.
+|       Name       | DataType  |   Default  |                                Description                                   |
+| :--------------- | :-------- | :--------- | :--------------------------------------------------------------------------- |
+| `pool`           | `Symbol`  | `:default` | Thread pool; supported values are `:default` and `:interactive`.             |
+| `queue_capacity` | `Integer` | `8`        | Maximum number of queued jobs. New jobs are rejected when the queue is full. |
+| `concurrently`   | `Integer` | `1`        | Maximum number of jobs executing concurrently.                               |
 """
 mutable struct Executor
     const lock           :: ReentrantLock
@@ -100,12 +102,25 @@ end
 
 
 """
-    metrics(executor::Executor)::NamedTuple
+metrics(executor::Executor)::NamedTuple
 
-Returns a metrics snapshot; metrics are eventually consistent.
+Returns a metrics snapshot. Metrics are **eventually consistent**.
+
+# Metrics
+
+|    Name     | DataType |    Type     |                          Description                                 |
+| :---------- | :------- | :---------- | :------------------------------------------------------------------- |
+| `rejected`  |   Int    | **Counter** | Total number of tasks rejected                                       |
+| `queued`    |   Int    | **Counter** | Total number of tasks accepted                                       |
+| `started`   |   Int    | **Counter** | Total number of tasks started                                        |
+| `completed` |   Int    | **Counter** | Total number of tasks completed successfully                         |
+| `stopped`   |   Int    | **Counter** | Total number of tasks stopped after `stop!`                          |
+| `cancelled` |   Int    | **Counter** | Total number of tasks cancelled before execution                     |
+| `failed`    |   Int    | **Counter** | Total number of tasks that failed due to an error in the task itself |
+| `backlog`   |   Int    | **Gauge**   | Current number of tasks in the channel                               |
+| `active`    |   Int    | **Gauge**   | Current number of tasks being executed                               |
 """
-metrics(e::Executor)::NamedTuple =
-    snapshot(e.metrics; e.concurrently, e.queue_capacity)
+metrics(e::Executor)::NamedTuple = snapshot(e.metrics)
 
 
 """

@@ -17,6 +17,7 @@ A production-oriented Julia executor:
 - Explicit job state machine.
 - Graceful shutdown.
 - Isolated job failures.
+- Metrics.
 
 ![Jack&James.jpg](images/Jack&James.jpg)
 
