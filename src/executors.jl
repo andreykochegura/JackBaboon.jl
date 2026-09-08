@@ -165,12 +165,13 @@ function dispatch!(executor::Executor)
                     end
                     acquire(executor.sem)
                     @atomic executor.metrics.active += 1
+                    @atomic executor.metrics.started += 1
                     if ! try_running!(job.handle)
                         release(executor.sem)
                         @atomic executor.metrics.cancelled += 1
+                        @atomic executor.metrics.active -= 1
                         continue  # skip canceled
                     end
-                    @atomic executor.metrics.started += 1
                     async_execute!(job.f, job.handle, executor.sem, executor.pool, executor.metrics)  # release(sem) here
                 catch ex
                     err = ExecutorInternalError("Executor dispatcher error", ex, catch_backtrace())
@@ -227,7 +228,7 @@ function with_executor(
     try
         f(executor)
     finally
-        close(executor)
+        iscrashed(executor) || close(executor)
     end
 end
 
@@ -333,8 +334,13 @@ function submit!(@nospecialize(f), executor::Executor)::Handle
             "Executor queue is closed; executor state: `$(@atomic(executor.state))`",
         ))
         job = Job(f)
-        put!(queue, job)
         @atomic executor.metrics.backlog += 1
+        try
+            put!(queue, job)
+        catch
+            @atomic executor.metrics.backlog -= 1
+            rethrow()
+        end
         @atomic executor.metrics.queued += 1
         return job.handle
     end
