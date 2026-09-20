@@ -41,15 +41,15 @@ julia> executor = Executor(
        );
 
 julia> result = execute!(executor) do cancel_token
-           "Job complited"
+           "Job completed"
        end
-"Job complited"
+"Job completed"
 
 julia> handle = submit!(executor) do cancel_token
            while ! iscancelrequested(cancel_token)
                sleep(0.1)
            end
-           iscancelrequested(cancel_token) ? "Job stoped" : "Job complited"
+           iscancelrequested(cancel_token) ? "Job stoped" : "Job completed"
        end;
 
 julia> stop!(handle);
