@@ -49,13 +49,13 @@ julia> handle = submit!(executor) do cancel_token
            while ! iscancelrequested(cancel_token)
                sleep(0.1)
            end
-           iscancelrequested(cancel_token) ? "Job stoped" : "Job completed"
+           iscancelrequested(cancel_token) ? "Job stopped" : "Job completed"
        end;
 
 julia> stop!(handle);
 
 julia> fetch(handle)
-"Job stoped"
+"Job stopped"
 ```
 
 ![Jack&James2.jpg](images/Jack&James2.jpg)
