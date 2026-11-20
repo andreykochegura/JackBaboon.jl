@@ -1,8 +1,6 @@
 [![CI](https://github.com/andreykochegura/JackBaboon/actions/workflows/CI.yml/badge.svg)](https://github.com/andreykochegura/JackBaboon/actions/workflows/CI.yml)
 [![Coverage](https://codecov.io/gh/andreykochegura/JackBaboon.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/andreykochegura/JackBaboon.jl)
 [![Docs](https://img.shields.io/badge/docs-stable-blue)](https://andreykochegura.github.io/JackBaboon.jl/)
-[![Julia](https://img.shields.io/badge/Julia-%E2%89%A51.10-purple)](https://julialang.org/)
-[![Status](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/andreykochegura/JackBaboon.jl)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 *One day, a Python service, exhausted by CPU-bound load, decided to shift some of it to a Julia microservice and breathed a sigh of relief. Countless overjoyed service users launched countless Python coroutines, and those launched countless Julia tasks... And then the baboon and his legless master came to the rescue!*
